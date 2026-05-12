@@ -2120,13 +2120,11 @@ function generateAll() {
             if (!bizConfig) return;
             
             // 检查是否需要自动拆分
-            if (bizConfig.autoSplit && bizConfig.splitConfig && bizConfig.splitConfig.length > 0) {
-                // 使用新的ETF业务拆分逻辑
-                const etfConfig = getETFConfigByZqlb(currentMarket, bizConfig.zqlb);
-                if (etfConfig && ETF_SPLIT_RULES[currentMarket + '_' + bizConfig.zqlb]) {
-                    // 新版ETF拆分逻辑
-                    const direction = bizConfig.direction;
-                    const rules = direction === '申购' ? etfConfig.purchase : etfConfig.redeem;
+            const etfConfig = getETFConfigByZqlb(currentMarket, bizConfig.zqlb);
+            if (bizConfig.autoSplit && etfConfig) {
+                // 使用ETF_SPLIT_RULES中的完整配置
+                const direction = bizConfig.direction;
+                const rules = direction === '申购' ? etfConfig.purchase : etfConfig.redeem;
                     
                     // 遍历各日期的拆分规则
                     Object.entries(rules).forEach(([dateKey, dateConfig]) => {
@@ -2171,8 +2169,8 @@ function generateAll() {
                             }
                         });
                     });
-                } else {
-                    // 旧版简单拆分逻辑（T+2日生成CIL/etftbk）
+                } else if (bizConfig.splitConfig && bizConfig.splitConfig.length > 0) {
+                    // 旧版拆分逻辑
                     if (currentMarket === 'SH' && dayOffset === 3) {
                         const jjdm = record.fields['JJDM'] || '000000';
                         
