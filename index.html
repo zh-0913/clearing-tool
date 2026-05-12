@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>场内基金清算文件生成工具 V2.9</title>
+    <title>场内基金清算文件生成工具 V2.10</title>
     <style>
         :root {
             --bg-primary: #0f1419;
@@ -344,8 +344,8 @@
         <div class="header-left">
             <div class="header-icon">📊</div>
             <div>
-                <div class="header-title">场内基金清算文件生成工具 V2.9</div>
-                <div class="header-subtitle">T+2日生成CIL/etftbk | 新增7种清算文件</div>
+                <div class="header-title">场内基金清算文件生成工具 V2.10</div>
+                <div class="header-subtitle">重构ETF业务拆分 | 支持多日多文件清算</div>
             </div>
         </div>
         <div class="header-right">
@@ -391,6 +391,8 @@
                             <span class="day-tab active" data-days="1" onclick="selectDays(1)">T日</span>
                             <span class="day-tab" data-days="2" onclick="selectDays(2)">T+1日</span>
                             <span class="day-tab" data-days="3" onclick="selectDays(3)">T+2日</span>
+                            <span class="day-tab" data-days="4" onclick="selectDays(4)">T+3日</span>
+                            <span class="day-tab" data-days="5" onclick="selectDays(5)">T+4日</span>
                         </div>
                     </div>
                 </div>
@@ -501,7 +503,7 @@ class DBFWriter {
 }
 
 // ============================================================
-// 场内基金清算文件生成工具 V2.9
+// 场内基金清算文件生成工具 V2.10
 // 数据来源：交易所官方数据接口规范（JSMX字段规范）
 // 更新说明：
 // - 新增7种清算文件DBF生成功能：
@@ -517,21 +519,254 @@ let recordIdCounter = 1;
 let generatedFiles = [];
 
 // ============================================================
-// 上海单市场ETF申购自动拆分配置
-// 一笔ETF申购交易会触发3种清算数据
+// ETF业务拆分配置 V2.10 - 基于UFC资产处理汇总表（最终确认版）
+// 支持按ETF类型、日期、文件类型的多维拆分
 // ============================================================
-const SH_ETF_PURCHASE_SPLIT = [
-    { subType: '份额', ywlx: '500', jllx: '001', qsbz: '   ', ghlx: '007', jyfs: '   ', label: '份额申购(500)' },
-    { subType: '成分股过户', ywlx: '502', jllx: '001', qsbz: '055', ghlx: '007', jyfs: '   ', label: '成分股过户(502)' },
-    { subType: '现金替代', ywlx: '504', jllx: '001', qsbz: '277', ghlx: '   ', jyfs: '104', label: '现金替代(504)' }
-];
 
-// 上海单市场ETF赎回自动拆分配置
-const SH_ETF_REDEEM_SPLIT = [
-    { subType: '份额', ywlx: '501', jllx: '001', qsbz: '   ', ghlx: '007', jyfs: '   ', label: '份额赎回(501)' },
-    { subType: '成分股过户', ywlx: '503', jllx: '001', qsbz: '055', ghlx: '007', jyfs: '104', label: '成分股过户(503)' },
-    { subType: '现金替代', ywlx: '505', jllx: '001', qsbz: '277', ghlx: '   ', jyfs: '104', label: '现金替代(505)' }
-];
+// ETF业务拆分配置结构
+// 每个ETF类型定义：purchase(申购)和redeem(赎回)的各日期文件生成规则
+// 注意：复制记录由交易所处理，无需生成
+const ETF_SPLIT_RULES = {
+    // ========================================
+    // 上海ETF配置
+    // ========================================
+    'SH_55': {  // 上海单市场ETF
+        name: '单市场ETF', zqlb: '55',
+        purchase: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '   ', ghlx: '007', label: '份额(500)'}, {ywlx: '502', qsbz: '055', ghlx: '007', label: '成分股(502)'}, {ywlx: '504', qsbz: '277', ghlx: '   ', label: '现金替代(504)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '103', label: '申赎差额(500)'}, {ywlx: '501', qsbz: '103', label: '申赎差额(501)'}]}] },
+            TN: { files: [{type: 'CIL', label: '替代退补'}, {type: 'ETFTBK', label: 'ETF退补款'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '   ', ghlx: '007', label: '份额(501)'}, {ywlx: '503', qsbz: '055', ghlx: '007', label: '成分股(503)'}, {ywlx: '505', qsbz: '277', ghlx: '   ', label: '现金替代(505)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '103', label: '申赎差额(500)'}, {ywlx: '501', qsbz: '103', label: '申赎差额(501)'}]}] },
+            TN: { files: [{type: 'CIL', label: '替代退补'}, {type: 'ETFTBK', label: 'ETF退补款'}] }
+        }
+    },
+    'SH_58': {  // 上海跨市场ETF
+        name: '跨市场ETF', zqlb: '58',
+        purchase: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '   ', ghlx: '007', label: '份额(500)'}, {ywlx: '502', qsbz: '055', ghlx: '007', label: '沪成分股(502)'}, {ywlx: '504', qsbz: '277', ghlx: '   ', label: '沪现金替代(504)'}, {ywlx: '506', qsbz: '   ', ghlx: '   ', label: '深成分股(506)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '123', label: '申赎差额(500)'}, {ywlx: '501', qsbz: '123', label: '申赎差额(501)'}]}] },
+            TN: { files: [{type: 'CIL', label: '替代退补'}, {type: 'ETFTBK', label: 'ETF退补款'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '   ', ghlx: '007', label: '份额(501)'}, {ywlx: '503', qsbz: '055', ghlx: '007', label: '沪成分股(503)'}, {ywlx: '505', qsbz: '277', ghlx: '   ', label: '沪现金替代(505)'}, {ywlx: '507', qsbz: '   ', ghlx: '   ', label: '深成分股(507)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '123', label: '申赎差额(500)'}, {ywlx: '501', qsbz: '123', label: '申赎差额(501)'}]}] },
+            TN: { files: [{type: 'CIL', label: '替代退补'}, {type: 'ETFTBK', label: 'ETF退补款'}] }
+        }
+    },
+    'SH_142': {  // 上海沪深港京ETF
+        name: '沪深港京ETF', zqlb: '142',
+        purchase: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '   ', ghlx: '007', label: '份额(500)'}, {ywlx: '502', qsbz: '055', ghlx: '007', label: '沪成分股(502)'}, {ywlx: '504', qsbz: '277', ghlx: '   ', label: '沪现金替代(504)'}, {ywlx: '506', qsbz: '   ', ghlx: '   ', label: '深成分股(506)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '123', label: '申赎差额(500)'}, {ywlx: '501', qsbz: '123', label: '申赎差额(501)'}]}] },
+            TN: { files: [{type: 'ETFTBK', label: 'ETF退补款'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '   ', ghlx: '007', label: '份额(501)'}, {ywlx: '503', qsbz: '055', ghlx: '007', label: '沪成分股(503)'}, {ywlx: '505', qsbz: '277', ghlx: '   ', label: '沪现金替代(505)'}, {ywlx: '507', qsbz: '   ', ghlx: '   ', label: '深成分股(507)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '123', label: '申赎差额(500)'}, {ywlx: '501', qsbz: '123', label: '申赎差额(501)'}]}] },
+            TN: { files: [{type: 'ETFTBK', label: 'ETF退补款'}] }
+        }
+    },
+    'SH_84': {  // 上海黄金ETF
+        name: '黄金ETF', zqlb: '84',
+        purchase: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '   ', ghlx: '007', label: '份额(500)'}, {ywlx: '504', qsbz: '277', ghlx: '   ', label: '现金替代(504)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '3002', label: '申赎差额(500)'}, {ywlx: '500', qsbz: '3003', label: '申赎差额(500)'}]}] },
+            TN2: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '3006', label: '差额(500)'}, {ywlx: '501', qsbz: '3006', label: '差额(501)'}]}] },
+            TN: { files: [{type: 'CIL', label: '现金差额'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '   ', ghlx: '007', label: '份额(501)'}, {ywlx: '505', qsbz: '277', ghlx: '   ', label: '现金替代(505)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '3002', label: '申赎差额(500)'}, {ywlx: '500', qsbz: '3003', label: '申赎差额(500)'}]}] },
+            TN2: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '3006', label: '差额(500)'}, {ywlx: '501', qsbz: '3006', label: '差额(501)'}]}] },
+            TN: { files: [{type: 'CIL', label: '现金差额'}] }
+        }
+    },
+    'SH_57': {  // 上海跨境ETF
+        name: '跨境ETF', zqlb: '57',
+        purchase: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '194', label: '份额通知(194)'}]}] },  // 复制记录由交易所处理
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '172', label: '交收结果(500)'}, {ywlx: '500', qsbz: '195', label: '交收结果(500)'}]}] },
+            TN1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '173', label: '差额(500)'}, {ywlx: '501', qsbz: '173', label: '差额(501)'}]}] },
+            TN: { files: [{type: 'CIL', label: '现金差额'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '191', label: '份额通知(191)'}]}] },  // 复制记录由交易所处理
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '192', label: '交收结果(501)'}]}] },
+            TN1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '173', label: '差额(500)'}, {ywlx: '501', qsbz: '173', label: '差额(501)'}]}] },
+            TN: { files: [{type: 'CIL', label: '现金差额'}] }
+        }
+    },
+    'SH_77': {  // 上海货币ETF
+        name: '货币ETF', zqlb: '77',
+        purchase: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '153', label: '份额(153)'}, {ywlx: '500', qsbz: '157', label: '申赎差额(157)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '155', label: '交收结果(155)'}]}] }
+        },
+        redeem: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '154', label: '份额(154)'}, {ywlx: '501', qsbz: '157', label: '申赎差额(157)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '156', label: '交收结果(156)'}]}] }
+        }
+    },
+    'SH_82': {  // 上海实物债券ETF
+        name: '债券ETF(实物)', zqlb: '82',
+        purchase: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '   ', ghlx: '007', label: '份额(500)'}, {ywlx: '502', qsbz: '055', ghlx: '007', label: '成分股(502)'}, {ywlx: '504', qsbz: '277', ghlx: '   ', label: '现金替代(504)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '3022', label: '申赎差额(3022)'}, {ywlx: '500', qsbz: '3023', label: '申赎差额(3023)'}]}] },
+            TN: { files: [{type: 'CIL', label: '替代退补'}, {type: 'ETFTBK', label: 'ETF退补款'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '   ', ghlx: '007', label: '份额(501)'}, {ywlx: '503', qsbz: '055', ghlx: '007', label: '成分股(503)'}, {ywlx: '505', qsbz: '277', ghlx: '   ', label: '现金替代(505)'}]}] },
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '3022', label: '申赎差额(3022)'}, {ywlx: '500', qsbz: '3023', label: '申赎差额(3023)'}]}] },
+            TN: { files: [{type: 'CIL', label: '替代退补'}, {type: 'ETFTBK', label: 'ETF退补款'}] }
+        }
+    },
+    'SH_83': {  // 上海现金债券ETF
+        name: '债券ETF(现金)', zqlb: '83',
+        purchase: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '3024', label: '份额(3024)'}]}] },  // 复制记录由交易所处理
+            T1: { files: [{type: 'JSMX', splits: [{ywlx: '500', qsbz: '3027', label: '申赎差额(3027)'}, {ywlx: '500', qsbz: '3028', label: '申赎差额(3028)'}]}] },
+            TN: { files: [{type: 'CIL', label: '替代退补'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'JSMX', splits: [{ywlx: '501', qsbz: '3034', label: '份额(3034)'}, {ywlx: '501', qsbz: '3036', label: '现金替代(3036)'}]}] },
+            TN: { files: [{type: 'CIL', label: '替代退补'}] }
+        }
+    },
+    // ========================================
+    // 深圳ETF配置
+    // ========================================
+    'SZ_55': {  // 深圳单市场ETF
+        name: '单市场ETF', zqlb: '55',
+        purchase: {
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SGSF', label: '份额(SGSF)'}, {ywlb: 'SGSQ', label: '成分股(SGSQ)'}, {ywlb: 'SGSZ', label: '现金替代(SGSZ)'}]}, {type: 'SJSMX2', ywlb: 'SGFY', label: '过户费(SGFY)'}] },
+            T1: { files: [{type: 'DSFMX', ywlb: 'DEXC', label: '申赎差额(DEXC)'}, {type: 'SJSZJ', ywlb: 'ZJSG', label: '资金变动(ZJSG)'}] },
+            TN: { files: [{type: 'DSFMX', ywlb: 'DETB', label: '替代退补(DETB)'}, {type: 'SJSZJ', ywlb: 'ZJSG', label: '资金变动(ZJSG)'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SHSF', label: '份额(SHSF)'}, {ywlb: 'SHSQ', label: '成分股(SHSQ)'}, {ywlb: 'SHSZ', label: '现金替代(SHSZ)'}]}, {type: 'SJSMX2', ywlb: 'SHFY', label: '过户费(SHFY)'}] },
+            TN: { files: [{type: 'DSFMX', ywlb: 'DETB', label: '替代退补(DETB)'}, {type: 'SJSZJ', ywlb: 'ZJSH', label: '资金变动(ZJSH)'}] }
+        }
+    },
+    'SZ_58': {  // 深圳跨市场ETF
+        name: '跨市场ETF', zqlb: '58',
+        purchase: {
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SGSF', label: '份额(SGSF)'}, {ywlb: 'SGSQ', label: '沪成分股(SGSQ)'}, {ywlb: 'SGSZ', label: '沪现金替代(SGSZ)'}]}, {type: 'SJSMX2', ywlb: 'SGFY', label: '过户费(SGFY)'}] },
+            T1: { files: [{type: 'DSFMX', ywlb: 'DEXC', label: '申赎差额(DEXC)'}, {type: 'SJSZJ', ywlb: 'ZJSG', label: '资金变动(ZJSG)'}] },
+            TN: { files: [{type: 'DSFMX', ywlb: 'DETB', label: '替代退补(DETB)'}, {type: 'SJSZJ', ywlb: 'ZJSG', label: '资金变动(ZJSG)'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SHSF', label: '份额(SHSF)'}, {ywlb: 'SHSQ', label: '沪成分股(SHSQ)'}, {ywlb: 'SHSZ', label: '沪现金替代(SHSZ)'}]}, {type: 'SJSMX2', ywlb: 'SHFY', label: '过户费(SHFY)'}] },
+            TN: { files: [{type: 'DSFMX', ywlb: 'DETB', label: '替代退补(DETB)'}, {type: 'SJSZJ', ywlb: 'ZJSH', label: '资金变动(ZJSH)'}] }
+        }
+    },
+    'SZ_142': {  // 深圳沪深港ETF
+        name: '深港通ETF', zqlb: '142',
+        purchase: {
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SGSF', label: '份额(SGSF)'}, {ywlb: 'SGSQ', label: '沪成分股(SGSQ)'}, {ywlb: 'SGSZ', label: '沪现金替代(SGSZ)'}]}, {type: 'SJSMX2', ywlb: 'SGFY', label: '过户费(SGFY)'}] },
+            T1: { files: [{type: 'DSFMX', ywlb: 'DEXC', label: '申赎差额(DEXC)'}, {type: 'SJSZJ', ywlb: 'ZJSG', label: '资金变动(ZJSG)'}] },
+            TN: { files: [{type: 'DSFMX', ywlb: 'DETB', label: '替代退补(DETB)'}, {type: 'SJSZJ', ywlb: 'ZJSG', label: '资金变动(ZJSG)'}] }
+        },
+        redeem: {
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SHSF', label: '份额(SHSF)'}, {ywlb: 'SHSQ', label: '沪成分股(SHSQ)'}, {ywlb: 'SHSZ', label: '沪现金替代(SHSZ)'}]}, {type: 'SJSMX2', ywlb: 'SHFY', label: '过户费(SHFY)'}] },
+            TN: { files: [{type: 'DSFMX', ywlb: 'DETB', label: '替代退补(DETB)'}, {type: 'SJSZJ', ywlb: 'ZJSH', label: '资金变动(ZJSH)'}] }
+        }
+    },
+    'SZ_84': {  // 深圳黄金ETF
+        name: '黄金ETF', zqlb: '84',
+        purchase: {
+            T: { files: [{type: 'SJSJG', splits: [{ywlb: 'EFTB', label: 'ETF申购(EFTB)'}]}] },
+            T1: { files: [{type: 'SJSJG', splits: [{ywlb: 'EFXC', label: '申赎差额(EFXC)'}]}] },
+            TN: { files: [{type: 'SJJG', splits: [{ywlb: 'EFTB', label: '替代+赎回款(EFTB)'}]}] }
+        },
+        redeem: {
+            T: { files: [{type: 'SJSJG', splits: [{ywlb: 'SHXF', label: 'ETF赎回(SHXF)'}]}] },
+            TN: { files: [{type: 'SJSMX2', ywlb: 'SHXZ', label: '替代(SHXZ)'}, {type: 'SJJG', splits: [{ywlb: 'SHXZ', label: '赎回款(SHXZ)'}]}] }
+        }
+    },
+    'SZ_57': {  // 深圳跨境ETF
+        name: '跨境ETF', zqlb: '57',
+        purchase: {
+            T: { files: [{type: 'SJSJG', splits: [{ywlb: 'EFTB', label: 'ETF申购(EFTB)'}]}] },
+            T1: { files: [{type: 'SJSJG', splits: [{ywlb: 'EFXC', label: '申赎差额(EFXC)'}]}] },
+            TN: { files: [{type: 'SJJG', splits: [{ywlb: 'EFTB', label: '替代+赎回款(EFTB)'}]}] }
+        },
+        redeem: {
+            T: { files: [{type: 'SJSJG', splits: [{ywlb: 'SHXF', label: 'ETF赎回(SHXF)'}]}] },
+            TN: { files: [{type: 'SJSMX2', ywlb: 'SHXZ', label: '替代(SHXZ)'}, {type: 'SJJG', splits: [{ywlb: 'SHXZ', label: '赎回款(SHXZ)'}]}] }
+        }
+    },
+    'SZ_83': {  // 深圳现金债券ETF
+        name: '债券ETF(现金)', zqlb: '83',
+        purchase: {
+            T: { files: [{type: 'SJSJG', splits: [{ywlb: 'EFTB', label: 'ETF申购(EFTB)'}]}] },
+            TN: { files: [{type: 'SJJG', splits: [{ywlb: 'EFTB', label: '替代+赎回款(EFTB)'}]}] }
+        },
+        redeem: {
+            T: { files: [{type: 'SJSJG', splits: [{ywlb: 'SHXF', label: 'ETF赎回(SHXF)'}]}] },
+            TN: { files: [{type: 'SJSMX2', ywlb: 'SHXZ', label: '替代(SHXZ)'}, {type: 'SJJG', splits: [{ywlb: 'SHXZ', label: '赎回款(SHXZ)'}]}] }
+        }
+    },
+    'SZ_77': {  // 深圳货币ETF
+        name: '货币ETF', zqlb: '77',
+        purchase: {
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SGSF', label: '份额(SGSF)'}, {ywlb: 'SGSZ', label: '现金替代(SGSZ)'}]}] }]
+        },
+        redeem: {
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SHSF', label: '份额(SHSF)'}, {ywlb: 'SHSZ', label: '现金替代(SHSZ)'}]}] }]
+        }
+    }
+};
+
+// 日期偏移配置：TN表示T+N日
+const DATE_OFFSET_MAP = {
+    'T': 0, 'T1': 1, 'TN': 2, 'TN1': 3, 'TN2': 4, 'T_同': 0
+};
+
+// 根据ZQLB获取ETF配置
+function getETFConfigByZqlb(market, zqlb) {
+    const key = market + '_' + zqlb;
+    return ETF_SPLIT_RULES[key] || null;
+}
+
+// 获取业务拆分规则
+function getETFSplitRules(market, zqlb, direction) {
+    const config = getETFConfigByZqlb(market, zqlb);
+    if (!config) return null;
+    return direction === '申购' ? config.purchase : config.redeem;
+}
+
+// 获取所有需要的日期和文件
+function getETFFileSchedule(market, zqlb, direction) {
+    const rules = getETFSplitRules(market, zqlb, direction);
+    if (!rules) return [];
+    
+    const schedule = [];
+    Object.entries(rules).forEach(([dateKey, dateConfig]) => {
+        const offset = DATE_OFFSET_MAP[dateKey] || 0;
+        dateConfig.files.forEach(file => {
+            schedule.push({
+                dateKey: dateKey,
+                offset: offset,
+                fileType: file.type,
+                splits: file.splits || [{ywlb: file.ywlb || '', label: file.label || ''}],
+                label: file.label || ''
+            });
+        });
+    });
+    return schedule;
+}
+
+// 上海ETF申购自动拆分配置（兼容旧代码）
+const SH_ETF_PURCHASE_SPLIT = ETF_SPLIT_RULES['SH_55']?.purchase.T.files[0].splits || [];
+
+// 上海ETF赎回自动拆分配置（兼容旧代码）
+const SH_ETF_REDEEM_SPLIT = ETF_SPLIT_RULES['SH_55']?.redeem.T.files[0].splits || [];const SH_ETF_PURCHASE_SPLIT = ETF_SPLIT_RULES['SH_55']?.purchase.T.files[0].splits || [];
+
+// 上海ETF赎回自动拆分配置（兼容旧代码）
+const SH_ETF_REDEEM_SPLIT = ETF_SPLIT_RULES['SH_55']?.redeem.T.files[0].splits || [];
 
 // ============================================================
 // 上海市场完整业务配置（按证券类别细分）
@@ -541,21 +776,21 @@ const SH_BUSINESS_CONFIG = {
     '单市场ETF-买入': { category: 'ETF', name: '单市场ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '55', autoSplit: false },
     '单市场ETF-卖出': { category: 'ETF', name: '单市场ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '55', autoSplit: false },
     
-    // 申购/赎回自动拆分为3条记录
-    '单市场ETF-申购': { category: 'ETF', name: '单市场ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', zqlb: '55', autoSplit: true, splitConfig: SH_ETF_PURCHASE_SPLIT },
-    '单市场ETF-赎回': { category: 'ETF', name: '单市场ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', zqlb: '55', autoSplit: true, splitConfig: SH_ETF_REDEEM_SPLIT },
+    // 申购/赎回使用新的ETF拆分规则（多日多文件）
+    '单市场ETF-申购': { category: 'ETF', name: '单市场ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', zqlb: '55', autoSplit: true, splitConfig: [] },
+    '单市场ETF-赎回': { category: 'ETF', name: '单市场ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', zqlb: '55', autoSplit: true, splitConfig: [] },
     
     // ETF - 跨市场股票ETF
     '跨市场ETF-买入': { category: 'ETF', name: '跨市场ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '58', autoSplit: false },
     '跨市场ETF-卖出': { category: 'ETF', name: '跨市场ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '58', autoSplit: false },
-    '跨市场ETF-申购': { category: 'ETF', name: '跨市场ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '58', autoSplit: true, splitConfig: SH_ETF_PURCHASE_SPLIT },
-    '跨市场ETF-赎回': { category: 'ETF', name: '跨市场ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '58', autoSplit: true, splitConfig: SH_ETF_REDEEM_SPLIT },
+    '跨市场ETF-申购': { category: 'ETF', name: '跨市场ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '58', autoSplit: true, splitConfig: [] },
+    '跨市场ETF-赎回': { category: 'ETF', name: '跨市场ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '58', autoSplit: true, splitConfig: [] },
     
     // ETF - 跨境ETF
     '跨境ETF-买入': { category: 'ETF', name: '跨境ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '57', autoSplit: false },
     '跨境ETF-卖出': { category: 'ETF', name: '跨境ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '57', autoSplit: false },
-    '跨境ETF-申购': { category: 'ETF', name: '跨境ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '57', autoSplit: true, splitConfig: SH_ETF_PURCHASE_SPLIT },
-    '跨境ETF-赎回': { category: 'ETF', name: '跨境ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '57', autoSplit: true, splitConfig: SH_ETF_REDEEM_SPLIT },
+    '跨境ETF-申购': { category: 'ETF', name: '跨境ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '57', autoSplit: true, splitConfig: [] },
+    '跨境ETF-赎回': { category: 'ETF', name: '跨境ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '57', autoSplit: true, splitConfig: [] },
     
     // ETF - 债券ETF(实物申赎)
     '债券ETF实物-买入': { category: 'ETF', name: '债券ETF(实物)', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '82', autoSplit: false },
@@ -588,8 +823,8 @@ const SH_BUSINESS_CONFIG = {
     // ETF - 沪深港京ETF
     '沪深港京ETF-买入': { category: 'ETF', name: '沪深港京ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '142', autoSplit: false },
     '沪深港京ETF-卖出': { category: 'ETF', name: '沪深港京ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '142', autoSplit: false },
-    '沪深港京ETF-申购': { category: 'ETF', name: '沪深港京ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '142', autoSplit: true, splitConfig: SH_ETF_PURCHASE_SPLIT },
-    '沪深港京ETF-赎回': { category: 'ETF', name: '沪深港京ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '142', autoSplit: true, splitConfig: SH_ETF_REDEEM_SPLIT },
+    '沪深港京ETF-申购': { category: 'ETF', name: '沪深港京ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '142', autoSplit: true, splitConfig: [] },
+    '沪深港京ETF-赎回': { category: 'ETF', name: '沪深港京ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '142', autoSplit: true, splitConfig: [] },
     
     // LOF
     'LOF-买入': { category: 'LOF', name: 'LOF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '034', qsbz: '05B', zqlb: '', autoSplit: false },
@@ -641,20 +876,20 @@ const SZ_BUSINESS_CONFIG = {
     // ETF - 单市场
     '单市场ETF-买入': { category: 'ETF', name: '单市场ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '55', autoSplit: false },
     '单市场ETF-卖出': { category: 'ETF', name: '单市场ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '55', autoSplit: false },
-    '单市场ETF-申购': { category: 'ETF', name: '单市场ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '55', autoSplit: false },
-    '单市场ETF-赎回': { category: 'ETF', name: '单市场ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '55', autoSplit: false },
+    '单市场ETF-申购': { category: 'ETF', name: '单市场ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '55', autoSplit: true, splitConfig: [] },
+    '单市场ETF-赎回': { category: 'ETF', name: '单市场ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '55', autoSplit: true, splitConfig: [] },
     
     // ETF - 跨市场
     '跨市场ETF-买入': { category: 'ETF', name: '跨市场ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '58', autoSplit: false },
     '跨市场ETF-卖出': { category: 'ETF', name: '跨市场ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '58', autoSplit: false },
-    '跨市场ETF-申购': { category: 'ETF', name: '跨市场ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '58', autoSplit: false },
-    '跨市场ETF-赎回': { category: 'ETF', name: '跨市场ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '58', autoSplit: false },
+    '跨市场ETF-申购': { category: 'ETF', name: '跨市场ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '58', autoSplit: true, splitConfig: [] },
+    '跨市场ETF-赎回': { category: 'ETF', name: '跨市场ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '58', autoSplit: true, splitConfig: [] },
     
     // ETF - 跨境
     '跨境ETF-买入': { category: 'ETF', name: '跨境ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '57', autoSplit: false },
     '跨境ETF-卖出': { category: 'ETF', name: '跨境ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '57', autoSplit: false },
-    '跨境ETF-申购': { category: 'ETF', name: '跨境ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '57', autoSplit: false },
-    '跨境ETF-赎回': { category: 'ETF', name: '跨境ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '57', autoSplit: false },
+    '跨境ETF-申购': { category: 'ETF', name: '跨境ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '57', autoSplit: true, splitConfig: [] },
+    '跨境ETF-赎回': { category: 'ETF', name: '跨境ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '57', autoSplit: true, splitConfig: [] },
     
     // ETF - 实物债券
     '债券ETF实物-买入': { category: 'ETF', name: '债券ETF(实物)', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '82', autoSplit: false },
@@ -663,26 +898,26 @@ const SZ_BUSINESS_CONFIG = {
     // ETF - 现金债券
     '债券ETF现金-买入': { category: 'ETF', name: '债券ETF(现金)', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '83', autoSplit: false },
     '债券ETF现金-卖出': { category: 'ETF', name: '债券ETF(现金)', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '83', autoSplit: false },
-    '债券ETF现金-申购': { category: 'ETF', name: '债券ETF(现金)', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '83', autoSplit: false },
-    '债券ETF现金-赎回': { category: 'ETF', name: '债券ETF(现金)', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '83', autoSplit: false },
+    '债券ETF现金-申购': { category: 'ETF', name: '债券ETF(现金)', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '83', autoSplit: true, splitConfig: [] },
+    '债券ETF现金-赎回': { category: 'ETF', name: '债券ETF(现金)', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '83', autoSplit: true, splitConfig: [] },
     
     // ETF - 黄金
     '黄金ETF-买入': { category: 'ETF', name: '黄金ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '84', autoSplit: false },
     '黄金ETF-卖出': { category: 'ETF', name: '黄金ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '84', autoSplit: false },
-    '黄金ETF-申购': { category: 'ETF', name: '黄金ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '84', autoSplit: false },
-    '黄金ETF-赎回': { category: 'ETF', name: '黄金ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '84', autoSplit: false },
+    '黄金ETF-申购': { category: 'ETF', name: '黄金ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '84', autoSplit: true, splitConfig: [] },
+    '黄金ETF-赎回': { category: 'ETF', name: '黄金ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '84', autoSplit: true, splitConfig: [] },
     
     // ETF - 货币
     '货币ETF-买入': { category: 'ETF', name: '货币ETF', direction: '买入', icon: '💰', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '77', autoSplit: false },
     '货币ETF-卖出': { category: 'ETF', name: '货币ETF', direction: '卖出', icon: '💰', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '77', autoSplit: false },
-    '货币ETF-申购': { category: 'ETF', name: '货币ETF', direction: '申购', icon: '💰', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '77', autoSplit: false },
-    '货币ETF-赎回': { category: 'ETF', name: '货币ETF', direction: '赎回', icon: '💰', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '77', autoSplit: false },
+    '货币ETF-申购': { category: 'ETF', name: '货币ETF', direction: '申购', icon: '💰', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '77', autoSplit: true, splitConfig: [] },
+    '货币ETF-赎回': { category: 'ETF', name: '货币ETF', direction: '赎回', icon: '💰', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '77', autoSplit: true, splitConfig: [] },
     
     // ETF - 深港通
     '深港通ETF-买入': { category: 'ETF', name: '深港通ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '107', autoSplit: false },
     '深港通ETF-卖出': { category: 'ETF', name: '深港通ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '107', autoSplit: false },
-    '深港通ETF-申购': { category: 'ETF', name: '深港通ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '107', autoSplit: false },
-    '深港通ETF-赎回': { category: 'ETF', name: '深港通ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '107', autoSplit: false },
+    '深港通ETF-申购': { category: 'ETF', name: '深港通ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '107', autoSplit: true, splitConfig: [] },
+    '深港通ETF-赎回': { category: 'ETF', name: '深港通ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '107', autoSplit: true, splitConfig: [] },
     
     // 深圳资金变动文件(SJSZJ)
     'SJSZJ-资金申购': { category: 'SJSZJ', name: 'SJSZJ', direction: '资金申购', icon: '💰', fileType: 'SJSZJ', ywlb: 'ZJSG', autoSplit: false },
@@ -693,7 +928,40 @@ const SZ_BUSINESS_CONFIG = {
     'DSFMX-ETF申购': { category: 'DSFMX', name: 'DSFMX', direction: 'ETF申购', icon: '📥', fileType: 'DSFMX', ywlb: 'DSES', autoSplit: false },
     'DSFMX-ETF赎回': { category: 'DSFMX', name: 'DSFMX', direction: 'ETF赎回', icon: '📤', fileType: 'DSFMX', ywlb: 'DSES', autoSplit: false },
     
-    // 深圳明细结果文件(SJSJG)
+    
+// 深圳结果文件(SJJG)字段定义
+const SZ_SJJG_FIELDS = [
+    { name: 'MXSJLX', len: 2, type: 'C', desc: '数据记录类型', default: '10', readonly: true },
+    { name: 'MXHBDH', len: 3, type: 'C', desc: '货币代号', default: 'RMB', readonly: true },
+    { name: 'MXJSFS', len: 1, type: 'C', desc: '交收方式', default: '1', readonly: true },
+    { name: 'MXJSZH', len: 6, type: 'C', desc: '结算账号', user: true, placeholder: '结算账号' },
+    { name: 'MXBFZH', len: 25, type: 'C', desc: '备付金账户', user: true, placeholder: '备付金账户' },
+    { name: 'MXJYDY', len: 6, type: 'C', desc: '交易单元', user: true, placeholder: '交易单元' },
+    { name: 'MXTGDY', len: 6, type: 'C', desc: '托管单元', user: true, placeholder: '托管单元' },
+    { name: 'MXZQZH', len: 20, type: 'C', desc: '证券账户', user: true, placeholder: '证券账户' },
+    { name: 'MXZQDM', len: 6, type: 'C', desc: '证券代码', user: true, placeholder: 'ETF代码' },
+    { name: 'MXZQLB', len: 3, type: 'C', desc: '证券类别', user: true, placeholder: '55/57/58' },
+    { name: 'MXYWLB', len: 4, type: 'C', desc: '业务类别', user: true, placeholder: 'EFTB/SHXZ' },
+    { name: 'MXQSRQ', len: 8, type: 'C', desc: '清算日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'MXJSRQ', len: 8, type: 'C', desc: '交收日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'MXCJRQ', len: 8, type: 'C', desc: '成交日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'MXSXH', len: 6, type: 'C', desc: '顺序号', readonly: true },
+    { name: 'MXCJSL', len: 14, type: 'N', desc: '成交数量', user: true, placeholder: '数量' },
+    { name: 'MXQSBJ', len: 17, type: 'N', desc: '清算本金', user: true, placeholder: '金额' },
+    { name: 'MXYHS', len: 12, type: 'N', desc: '印花税', user: true, placeholder: '0' },
+    { name: 'MXJYJSF', len: 12, type: 'N', desc: '交易经手费', user: true, placeholder: '费用' },
+    { name: 'MXJGGF', len: 12, type: 'N', desc: '监管规费', user: true, placeholder: '0' },
+    { name: 'MXGHF', len: 12, type: 'N', desc: '过户费', user: true, placeholder: '0' },
+    { name: 'MXJSF', len: 12, type: 'N', desc: '结算费', user: true, placeholder: '费用' },
+    { name: 'MXSXF', len: 12, type: 'N', desc: '手续费', user: true, placeholder: '费用' },
+    { name: 'MXQTFY', len: 12, type: 'N', desc: '其它费用', user: true, placeholder: '0' },
+    { name: 'MXZJJE', len: 17, type: 'N', desc: '资金金额', user: true, placeholder: '0' },
+    { name: 'MXSFJE', len: 18, type: 'N', desc: '收付净额', user: true, placeholder: '净额' },
+    { name: 'MXJSBZ', len: 1, type: 'C', desc: '交收标志', user: true, placeholder: '0' },
+    { name: 'MXZYDH', len: 4, type: 'C', desc: '摘要代号', user: true, placeholder: '摘要' }
+];
+
+// 深圳明细结果文件(SJSJG)
     'SJSJG-买入': { category: 'SJSJG', name: 'SJSJG', direction: '买入', icon: '📈', fileType: 'SJSJG', ywlb: 'JY00', zqlb: '55', autoSplit: false },
     'SJSJG-卖出': { category: 'SJSJG', name: 'SJSJG', direction: '卖出', icon: '📉', fileType: 'SJSJG', ywlb: 'JY00', zqlb: '55', autoSplit: false },
     'SJSJG-申购': { category: 'SJSJG', name: 'SJSJG', direction: '申购', icon: '🔄', fileType: 'SJSJG', ywlb: 'SGSF', zqlb: '55', autoSplit: false },
@@ -1199,30 +1467,77 @@ function selectBizType(bizType) {
 }
 
 // ============================================================
-// 显示拆分预览
+// 显示拆分预览（V2.10 新版ETF拆分规则）
 // ============================================================
 function showSplitPreview(bizType) {
     const previewDiv = document.getElementById('splitPreview');
     if (!previewDiv) return;
     
     const bizConfig = getBizConfig(bizType);
-    if (bizConfig && bizConfig.autoSplit && bizConfig.splitConfig) {
-        previewDiv.style.display = 'block';
-        previewDiv.innerHTML = `
-            <div style="font-size: 11px; color: var(--accent-yellow); margin-bottom: 8px;">📋 将自动拆分为以下${bizConfig.splitConfig.length}条记录：</div>
-            ${bizConfig.splitConfig.map((split, i) => `
+    if (!bizConfig) {
+        previewDiv.style.display = 'none';
+        return;
+    }
+    
+    // 检查是否使用新的ETF拆分规则
+    const etfConfig = getETFConfigByZqlb(currentMarket, bizConfig.zqlb);
+    if (bizConfig.autoSplit && etfConfig) {
+        const direction = bizConfig.direction;
+        const rules = direction === '申购' ? etfConfig.purchase : etfConfig.redeem;
+        
+        let html = '<div style="font-size: 11px; color: var(--accent-yellow); margin-bottom: 8px;">📋 ETF多日多文件拆分规则：</div>';
+        
+        // 按日期分组显示
+        Object.entries(rules).forEach(([dateKey, dateConfig]) => {
+            const dateLabel = getDateLabel(dateKey);
+            let filesInfo = dateConfig.files.map(f => {
+                if (f.splits && f.splits.length > 0) {
+                    const labels = f.splits.map(s => s.label || s.ywlx || s.ywlb).join('+');
+                    return f.type + '(' + labels + ')';
+                }
+                return f.type + '(' + (f.label || f.ywlb || '') + ')';
+            }).join(' + ');
+            
+            html += \`
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px; background: var(--bg-input); border-radius: 4px;">
-                    <span style="background: var(--accent-purple); color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px;">${i + 1}</span>
-                    <span style="color: var(--text-primary); font-size: 12px;">${split.label}</span>
-                    <span style="color: var(--text-secondary); font-size: 10px; margin-left: auto;">YWLX:${split.ywlx}</span>
+                    <span style="background: \${dateKey === 'T' ? 'var(--accent-blue)' : dateKey.includes('TN') ? 'var(--accent-purple)' : 'var(--accent-cyan)'}; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px;">\${dateLabel}</span>
+                    <span style="color: var(--text-primary); font-size: 11px;">\${filesInfo}</span>
                 </div>
-            `).join('')}
-        `;
+            \`;
+        });
+        
+        previewDiv.style.display = 'block';
+        previewDiv.innerHTML = html;
+    } else if (bizConfig.autoSplit && bizConfig.splitConfig && bizConfig.splitConfig.length > 0) {
+        // 旧版拆分规则
+        previewDiv.style.display = 'block';
+        previewDiv.innerHTML = \`
+            <div style="font-size: 11px; color: var(--accent-yellow); margin-bottom: 8px;">📋 将自动拆分为以下\${bizConfig.splitConfig.length}条记录：</div>
+            \${bizConfig.splitConfig.map((split, i) => \`
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px; background: var(--bg-input); border-radius: 4px;">
+                    <span style="background: var(--accent-purple); color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px;">\${i + 1}</span>
+                    <span style="color: var(--text-primary); font-size: 12px;">\${split.label}</span>
+                    <span style="color: var(--text-secondary); font-size: 10px; margin-left: auto;">YWLX:\${split.ywlx}</span>
+                </div>
+            \`).join('')}
+        \`;
     } else {
         previewDiv.style.display = 'none';
     }
 }
 
+// 获取日期标签
+function getDateLabel(dateKey) {
+    switch(dateKey) {
+        case 'T': return 'T日';
+        case 'T1': return 'T+1日';
+        case 'TN': return 'T+N日';
+        case 'TN1': return 'T+N+1日';
+        case 'TN2': return 'T+N+2日';
+        case 'T_同': return 'T日(同)';
+        default: return dateKey;
+    }
+}
 // ============================================================
 // 选择生成天数
 // ============================================================
@@ -1385,6 +1700,7 @@ function getFieldConfig(fileType) {
         case 'SJSZJ': return SZ_SJSZJ_FIELDS;
         case 'SJSJG': return SZ_SJSJG_FIELDS;
         case 'DSFMX': return SZ_DSFMX_FIELDS;
+        case 'SJJG': return SZ_SJJG_FIELDS;
         case 'GH': return SH_GH_FIELDS;
         case 'BGH': return SH_BGH_FIELDS;
         case 'CIL': return SH_CIL_FIELDS;
@@ -1676,6 +1992,88 @@ function clearAll() {
 // ============================================================
 // 生成清算文件
 // ============================================================
+// ============================================================
+// 根据文件类型收集记录到对应分组
+// ============================================================
+function collectRecordToGroup(dateGroups, targetDate, fileType, record, bizConfig, split) {
+    // 确保日期组存在
+    const startDate = document.getElementById('startDate').value;
+    const dayOffset = getDayOffset(targetDate, startDate) + 1;
+    const dateLabel = dayOffset === 1 ? 'T日' : 'T+' + (dayOffset-1) + '日';
+    
+    if (!dateGroups[targetDate]) {
+        dateGroups[targetDate] = {
+            dateLabel: dateLabel,
+            shJsmx: [], szJsmx: {}, shKf1: [], szSjsfx: [],
+            szSjszj: {}, szSjsjg: {}, szDsfmx: {}, szSjjg: {},
+            shGh: {}, shBgh: {}, shCil: {}, shEtftbk: {},
+            shSjjg: {}
+        };
+    }
+    
+    if (currentMarket === 'SH') {
+        switch(fileType) {
+            case 'JSMX':
+                dateGroups[targetDate].shJsmx.push({ record, bizConfig, split });
+                break;
+            case 'BGH':
+                const bghKey = record.fields['XWH1'] || '00000';
+                if (!dateGroups[targetDate].shBgh[bghKey]) dateGroups[targetDate].shBgh[bghKey] = [];
+                dateGroups[targetDate].shBgh[bghKey].push({ record, bizConfig, split });
+                break;
+            case 'CIL':
+                const cilKey = record.fields['ZQDM1'] || record.fields['JJDM'] || '000000';
+                if (!dateGroups[targetDate].shCil[cilKey]) dateGroups[targetDate].shCil[cilKey] = [];
+                dateGroups[targetDate].shCil[cilKey].push({ record, bizConfig, split });
+                break;
+            case 'ETFTBK':
+                const tbkKey = record.fields['ZQDM1'] || record.fields['JJDM'] || '000000';
+                if (!dateGroups[targetDate].shEtftbk[tbkKey]) dateGroups[targetDate].shEtftbk[tbkKey] = [];
+                dateGroups[targetDate].shEtftbk[tbkKey].push({ record, bizConfig, split });
+                break;
+        }
+    } else {
+        const ywlb = split.ywlb || record.fields['MXYWLB'] || bizConfig.ywlb;
+        switch(fileType) {
+            case 'SJSMX1':
+            case 'SJSMX':
+                if (!dateGroups[targetDate].szJsmx[ywlb]) dateGroups[targetDate].szJsmx[ywlb] = [];
+                dateGroups[targetDate].szJsmx[ywlb].push({ record, bizConfig, split });
+                break;
+            case 'SJSMX2':
+                if (!dateGroups[targetDate].szJsmx[ywlb]) dateGroups[targetDate].szJsmx[ywlb] = [];
+                dateGroups[targetDate].szJsmx[ywlb].push({ record, bizConfig, split });
+                break;
+            case 'DSFMX':
+                if (!dateGroups[targetDate].szDsfmx[ywlb]) dateGroups[targetDate].szDsfmx[ywlb] = [];
+                dateGroups[targetDate].szDsfmx[ywlb].push({ record, bizConfig, split });
+                break;
+            case 'SJSZJ':
+                if (!dateGroups[targetDate].szSjszj[ywlb]) dateGroups[targetDate].szSjszj[ywlb] = [];
+                dateGroups[targetDate].szSjszj[ywlb].push({ record, bizConfig, split });
+                break;
+            case 'SJSJG':
+                if (!dateGroups[targetDate].szSjsjg[ywlb]) dateGroups[targetDate].szSjsjg[ywlb] = [];
+                dateGroups[targetDate].szSjsjg[ywlb].push({ record, bizConfig, split });
+                break;
+            case 'SJJG':
+                if (!dateGroups[targetDate].szSjjg[ywlb]) dateGroups[targetDate].szSjjg[ywlb] = [];
+                dateGroups[targetDate].szSjjg[ywlb].push({ record, bizConfig, split });
+                break;
+        }
+    }
+}
+
+// ============================================================
+// 获取日期偏移量
+// ============================================================
+function getDayOffset(dateStr, baseDateStr) {
+    const date = new Date(dateStr.substring(0, 4) + '-' + dateStr.substring(4, 6) + '-' + dateStr.substring(6, 8));
+    const base = new Date(baseDateStr.substring(0, 4) + '-' + baseDateStr.substring(4, 6) + '-' + baseDateStr.substring(6, 8));
+    return Math.round((date - base) / (1000 * 60 * 60 * 24));
+}
+
+
 function generateAll() {
     if (records.length === 0 || records.every(r => !r.bizType)) {
         alert('请先选择业务类型并填写记录');
@@ -1711,7 +2109,8 @@ function generateAll() {
                 shGh: {},     // 上海gh按席位号分组
                 shBgh: {},    // 上海bgh按席位号分组
                 shCil: {},    // 上海CIL按基金代码分组
-                shEtftbk: {}  // 上海etftbk按基金代码分组
+                shEtftbk: {},  // 上海etftbk按基金代码分组
+                szSjjg: {}    // 深圳SJJG按业务类别分组
             };
         }
         
@@ -1723,72 +2122,121 @@ function generateAll() {
             
             // 检查是否需要自动拆分
             if (bizConfig.autoSplit && bizConfig.splitConfig && bizConfig.splitConfig.length > 0) {
-                // 上海ETF申购/赎回：T+2日生成CIL和etftbk文件，T日/T+1日生成jsmx
-                if (currentMarket === 'SH' && dayOffset === 3) {
-                    // T+2日：上海ETF申购/赎回生成CIL和etftbk
-                    const jjdm = record.fields['JJDM'] || '000000';
+                // 使用新的ETF业务拆分逻辑
+                const etfConfig = getETFConfigByZqlb(currentMarket, bizConfig.zqlb);
+                if (etfConfig && ETF_SPLIT_RULES[currentMarket + '_' + bizConfig.zqlb]) {
+                    // 新版ETF拆分逻辑
+                    const direction = bizConfig.direction;
+                    const rules = direction === '申购' ? etfConfig.purchase : etfConfig.redeem;
                     
-                    // CIL现金差额
-                    const cilRecord = JSON.parse(JSON.stringify(record));
-                    cilRecord.id = recordIdCounter++;
-                    cilRecord.subType = '现金差额';
-                    cilRecord.fields = { ...record.fields };
-                    if (!dateGroups[targetDate].shCil[jjdm]) {
-                        dateGroups[targetDate].shCil[jjdm] = [];
-                    }
-                    dateGroups[targetDate].shCil[jjdm].push({
-                        record: cilRecord,
-                        bizConfig: getBizConfig('CIL-现金差额')
-                    });
-                    
-                    // etftbk ETF退补款
-                    const etftbkRecord = JSON.parse(JSON.stringify(record));
-                    etftbkRecord.id = recordIdCounter++;
-                    etftbkRecord.subType = 'ETF退补款';
-                    etftbkRecord.fields = { ...record.fields };
-                    if (!dateGroups[targetDate].shEtftbk[jjdm]) {
-                        dateGroups[targetDate].shEtftbk[jjdm] = [];
-                    }
-                    dateGroups[targetDate].shEtftbk[jjdm].push({
-                        record: etftbkRecord,
-                        bizConfig: getBizConfig('etftbk-ETF退补款')
+                    // 遍历各日期的拆分规则
+                    Object.entries(rules).forEach(([dateKey, dateConfig]) => {
+                        const requiredOffset = DATE_OFFSET_MAP[dateKey] || 0;
+                        
+                        // 检查当前日期是否匹配
+                        if (dayOffset - 1 !== requiredOffset) return;
+                        
+                        const targetDateForRule = addDays(startDate, requiredOffset);
+                        
+                        // 遍历该日期的所有文件
+                        dateConfig.files.forEach(fileConfig => {
+                            if (fileConfig.splits && fileConfig.splits.length > 0) {
+                                // 有多条拆分记录
+                                fileConfig.splits.forEach((split, index) => {
+                                    const splitRecord = JSON.parse(JSON.stringify(record));
+                                    splitRecord.id = recordIdCounter++;
+                                    splitRecord.subType = split.label || split.ywlx || split.ywlb;
+                                    splitRecord.splitInfo = split;
+                                    splitRecord.fields = { ...record.fields };
+                                    
+                                    // 应用拆分配置
+                                    if (split.ywlx) splitRecord.fields['YWLX'] = split.ywlx;
+                                    if (split.qsbz) splitRecord.fields['QSBZ'] = split.qsbz;
+                                    if (split.ghlx) splitRecord.fields['GHLX'] = split.ghlx;
+                                    if (split.jyfs) splitRecord.fields['JYFS'] = split.jyfs;
+                                    if (split.ywlb) splitRecord.fields['MXYWLB'] = split.ywlb;
+                                    
+                                    // 根据文件类型收集记录
+                                    collectRecordToGroup(dateGroups, targetDateForRule, fileConfig.type, splitRecord, bizConfig, split);
+                                });
+                            } else {
+                                // 单条记录
+                                const singleRecord = JSON.parse(JSON.stringify(record));
+                                singleRecord.id = recordIdCounter++;
+                                singleRecord.subType = fileConfig.label;
+                                singleRecord.splitInfo = { ywlb: fileConfig.ywlb };
+                                singleRecord.fields = { ...record.fields };
+                                if (fileConfig.ywlb) singleRecord.fields['MXYWLB'] = fileConfig.ywlb;
+                                
+                                collectRecordToGroup(dateGroups, targetDateForRule, fileConfig.type, singleRecord, bizConfig, { ywlb: fileConfig.ywlb });
+                            }
+                        });
                     });
                 } else {
-                    // T日/T+1日：自动拆分为多条jsmx记录
-                    bizConfig.splitConfig.forEach((split, index) => {
-                        const splitRecord = JSON.parse(JSON.stringify(record));
-                        splitRecord.id = recordIdCounter++;
-                        splitRecord.subType = split.subType;
-                        splitRecord.splitInfo = split;
-                        splitRecord.fields = { ...record.fields };
+                    // 旧版简单拆分逻辑（T+2日生成CIL/etftbk）
+                    if (currentMarket === 'SH' && dayOffset === 3) {
+                        const jjdm = record.fields['JJDM'] || '000000';
                         
-                        // 应用拆分配置
-                        if (split.ywlx) splitRecord.fields['YWLX'] = split.ywlx;
-                        if (split.jllx) splitRecord.fields['JLLX'] = split.jllx;
-                        if (split.qsbz) splitRecord.fields['QSBZ'] = split.qsbz;
-                        if (split.ghlx) splitRecord.fields['GHLX'] = split.ghlx;
-                        if (split.jyfs) splitRecord.fields['JYFS'] = split.jyfs;
-                        
-                        if (currentMarket === 'SH') {
-                            // 上海JSMX记录收集
-                            dateGroups[targetDate].shJsmx.push({
-                                record: splitRecord,
-                                bizConfig: bizConfig,
-                                split: split
-                            });
-                        } else {
-                            // 深圳SJSMX按业务类别分组
-                            const ywlb = splitRecord.fields['MXYWLB'] || bizConfig.ywlb;
-                            if (!dateGroups[targetDate].szJsmx[ywlb]) {
-                                dateGroups[targetDate].szJsmx[ywlb] = [];
-                            }
-                            dateGroups[targetDate].szJsmx[ywlb].push({
-                                record: splitRecord,
-                                bizConfig: bizConfig,
-                                split: split
-                            });
+                        // CIL现金差额
+                        const cilRecord = JSON.parse(JSON.stringify(record));
+                        cilRecord.id = recordIdCounter++;
+                        cilRecord.subType = '现金差额';
+                        cilRecord.fields = { ...record.fields };
+                        if (!dateGroups[targetDate].shCil[jjdm]) {
+                            dateGroups[targetDate].shCil[jjdm] = [];
                         }
-                    });
+                        dateGroups[targetDate].shCil[jjdm].push({
+                            record: cilRecord,
+                            bizConfig: getBizConfig('CIL-现金差额')
+                        });
+                        
+                        // etftbk ETF退补款
+                        const etftbkRecord = JSON.parse(JSON.stringify(record));
+                        etftbkRecord.id = recordIdCounter++;
+                        etftbkRecord.subType = 'ETF退补款';
+                        etftbkRecord.fields = { ...record.fields };
+                        if (!dateGroups[targetDate].shEtftbk[jjdm]) {
+                            dateGroups[targetDate].shEtftbk[jjdm] = [];
+                        }
+                        dateGroups[targetDate].shEtftbk[jjdm].push({
+                            record: etftbkRecord,
+                            bizConfig: getBizConfig('etftbk-ETF退补款')
+                        });
+                    } else {
+                        // T日/T+1日：自动拆分为多条jsmx记录
+                        bizConfig.splitConfig.forEach((split, index) => {
+                            const splitRecord = JSON.parse(JSON.stringify(record));
+                            splitRecord.id = recordIdCounter++;
+                            splitRecord.subType = split.subType;
+                            splitRecord.splitInfo = split;
+                            splitRecord.fields = { ...record.fields };
+                            
+                            // 应用拆分配置
+                            if (split.ywlx) splitRecord.fields['YWLX'] = split.ywlx;
+                            if (split.jllx) splitRecord.fields['JLLX'] = split.jllx;
+                            if (split.qsbz) splitRecord.fields['QSBZ'] = split.qsbz;
+                            if (split.ghlx) splitRecord.fields['GHLX'] = split.ghlx;
+                            if (split.jyfs) splitRecord.fields['JYFS'] = split.jyfs;
+                            
+                            if (currentMarket === 'SH') {
+                                dateGroups[targetDate].shJsmx.push({
+                                    record: splitRecord,
+                                    bizConfig: bizConfig,
+                                    split: split
+                                });
+                            } else {
+                                const ywlb = splitRecord.fields['MXYWLB'] || bizConfig.ywlb;
+                                if (!dateGroups[targetDate].szJsmx[ywlb]) {
+                                    dateGroups[targetDate].szJsmx[ywlb] = [];
+                                }
+                                dateGroups[targetDate].szJsmx[ywlb].push({
+                                    record: splitRecord,
+                                    bizConfig: bizConfig,
+                                    split: split
+                                });
+                            }
+                        });
+                    }
                 }
             } else {
                 // 不需要拆分的记录
