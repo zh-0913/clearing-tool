@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>场内基金清算文件生成工具 V2.8</title>
+    <title>场内基金清算文件生成工具 V2.9</title>
     <style>
         :root {
             --bg-primary: #0f1419;
@@ -344,8 +344,8 @@
         <div class="header-left">
             <div class="header-icon">📊</div>
             <div>
-                <div class="header-title">场内基金清算文件生成工具 V2.8</div>
-                <div class="header-subtitle">新增7种清算文件 | SJSZJ/SJSJG/DSFMX/gh/bgh/CIL/etftbk</div>
+                <div class="header-title">场内基金清算文件生成工具 V2.9</div>
+                <div class="header-subtitle">T+2日生成CIL/etftbk | 新增7种清算文件</div>
             </div>
         </div>
         <div class="header-right">
@@ -501,7 +501,7 @@ class DBFWriter {
 }
 
 // ============================================================
-// 场内基金清算文件生成工具 V2.8
+// 场内基金清算文件生成工具 V2.9
 // 数据来源：交易所官方数据接口规范（JSMX字段规范）
 // 更新说明：
 // - 新增7种清算文件DBF生成功能：
@@ -1723,41 +1723,73 @@ function generateAll() {
             
             // 检查是否需要自动拆分
             if (bizConfig.autoSplit && bizConfig.splitConfig && bizConfig.splitConfig.length > 0) {
-                // 自动拆分为多条记录
-                bizConfig.splitConfig.forEach((split, index) => {
-                    const splitRecord = JSON.parse(JSON.stringify(record));
-                    splitRecord.id = recordIdCounter++;
-                    splitRecord.subType = split.subType;
-                    splitRecord.splitInfo = split;
-                    splitRecord.fields = { ...record.fields };
+                // 上海ETF申购/赎回：T+2日生成CIL和etftbk文件，T日/T+1日生成jsmx
+                if (currentMarket === 'SH' && dayOffset === 3) {
+                    // T+2日：上海ETF申购/赎回生成CIL和etftbk
+                    const jjdm = record.fields['JJDM'] || '000000';
                     
-                    // 应用拆分配置
-                    if (split.ywlx) splitRecord.fields['YWLX'] = split.ywlx;
-                    if (split.jllx) splitRecord.fields['JLLX'] = split.jllx;
-                    if (split.qsbz) splitRecord.fields['QSBZ'] = split.qsbz;
-                    if (split.ghlx) splitRecord.fields['GHLX'] = split.ghlx;
-                    if (split.jyfs) splitRecord.fields['JYFS'] = split.jyfs;
-                    
-                    if (currentMarket === 'SH') {
-                        // 上海JSMX记录收集
-                        dateGroups[targetDate].shJsmx.push({
-                            record: splitRecord,
-                            bizConfig: bizConfig,
-                            split: split
-                        });
-                    } else {
-                        // 深圳SJSMX按业务类别分组
-                        const ywlb = splitRecord.fields['MXYWLB'] || bizConfig.ywlb;
-                        if (!dateGroups[targetDate].szJsmx[ywlb]) {
-                            dateGroups[targetDate].szJsmx[ywlb] = [];
-                        }
-                        dateGroups[targetDate].szJsmx[ywlb].push({
-                            record: splitRecord,
-                            bizConfig: bizConfig,
-                            split: split
-                        });
+                    // CIL现金差额
+                    const cilRecord = JSON.parse(JSON.stringify(record));
+                    cilRecord.id = recordIdCounter++;
+                    cilRecord.subType = '现金差额';
+                    cilRecord.fields = { ...record.fields };
+                    if (!dateGroups[targetDate].shCil[jjdm]) {
+                        dateGroups[targetDate].shCil[jjdm] = [];
                     }
-                });
+                    dateGroups[targetDate].shCil[jjdm].push({
+                        record: cilRecord,
+                        bizConfig: getBizConfig('CIL-现金差额')
+                    });
+                    
+                    // etftbk ETF退补款
+                    const etftbkRecord = JSON.parse(JSON.stringify(record));
+                    etftbkRecord.id = recordIdCounter++;
+                    etftbkRecord.subType = 'ETF退补款';
+                    etftbkRecord.fields = { ...record.fields };
+                    if (!dateGroups[targetDate].shEtftbk[jjdm]) {
+                        dateGroups[targetDate].shEtftbk[jjdm] = [];
+                    }
+                    dateGroups[targetDate].shEtftbk[jjdm].push({
+                        record: etftbkRecord,
+                        bizConfig: getBizConfig('etftbk-ETF退补款')
+                    });
+                } else {
+                    // T日/T+1日：自动拆分为多条jsmx记录
+                    bizConfig.splitConfig.forEach((split, index) => {
+                        const splitRecord = JSON.parse(JSON.stringify(record));
+                        splitRecord.id = recordIdCounter++;
+                        splitRecord.subType = split.subType;
+                        splitRecord.splitInfo = split;
+                        splitRecord.fields = { ...record.fields };
+                        
+                        // 应用拆分配置
+                        if (split.ywlx) splitRecord.fields['YWLX'] = split.ywlx;
+                        if (split.jllx) splitRecord.fields['JLLX'] = split.jllx;
+                        if (split.qsbz) splitRecord.fields['QSBZ'] = split.qsbz;
+                        if (split.ghlx) splitRecord.fields['GHLX'] = split.ghlx;
+                        if (split.jyfs) splitRecord.fields['JYFS'] = split.jyfs;
+                        
+                        if (currentMarket === 'SH') {
+                            // 上海JSMX记录收集
+                            dateGroups[targetDate].shJsmx.push({
+                                record: splitRecord,
+                                bizConfig: bizConfig,
+                                split: split
+                            });
+                        } else {
+                            // 深圳SJSMX按业务类别分组
+                            const ywlb = splitRecord.fields['MXYWLB'] || bizConfig.ywlb;
+                            if (!dateGroups[targetDate].szJsmx[ywlb]) {
+                                dateGroups[targetDate].szJsmx[ywlb] = [];
+                            }
+                            dateGroups[targetDate].szJsmx[ywlb].push({
+                                record: splitRecord,
+                                bizConfig: bizConfig,
+                                split: split
+                            });
+                        }
+                    });
+                }
             } else {
                 // 不需要拆分的记录
                 if (currentMarket === 'SH') {
