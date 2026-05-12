@@ -711,10 +711,10 @@ const ETF_SPLIT_RULES = {
     'SZ_77': {  // 深圳货币ETF
         name: '货币ETF', zqlb: '77',
         purchase: {
-            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SGSF', label: '份额(SGSF)'}, {ywlb: 'SGSZ', label: '现金替代(SGSZ)'}]}] }]
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SGSF', label: '份额(SGSF)'}, {ywlb: 'SGSZ', label: '现金替代(SGSZ)'}]}] }
         },
         redeem: {
-            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SHSF', label: '份额(SHSF)'}, {ywlb: 'SHSZ', label: '现金替代(SHSZ)'}]}] }]
+            T: { files: [{type: 'SJSMX1', splits: [{ywlb: 'SHSF', label: '份额(SHSF)'}, {ywlb: 'SHSZ', label: '现金替代(SHSZ)'}]}] }
         }
     }
 };
@@ -760,9 +760,6 @@ function getETFFileSchedule(market, zqlb, direction) {
 
 // 上海ETF申购自动拆分配置（兼容旧代码）
 const SH_ETF_PURCHASE_SPLIT = ETF_SPLIT_RULES['SH_55']?.purchase.T.files[0].splits || [];
-
-// 上海ETF赎回自动拆分配置（兼容旧代码）
-const SH_ETF_REDEEM_SPLIT = ETF_SPLIT_RULES['SH_55']?.redeem.T.files[0].splits || [];const SH_ETF_PURCHASE_SPLIT = ETF_SPLIT_RULES['SH_55']?.purchase.T.files[0].splits || [];
 
 // 上海ETF赎回自动拆分配置（兼容旧代码）
 const SH_ETF_REDEEM_SPLIT = ETF_SPLIT_RULES['SH_55']?.redeem.T.files[0].splits || [];
@@ -926,8 +923,8 @@ const SZ_BUSINESS_CONFIG = {
     // 深圳实时代收代付明细(DSFMX)
     'DSFMX-ETF申购': { category: 'DSFMX', name: 'DSFMX', direction: 'ETF申购', icon: '📥', fileType: 'DSFMX', ywlb: 'DSES', autoSplit: false },
     'DSFMX-ETF赎回': { category: 'DSFMX', name: 'DSFMX', direction: 'ETF赎回', icon: '📤', fileType: 'DSFMX', ywlb: 'DSES', autoSplit: false },
-    
-    
+};
+
 // 深圳结果文件(SJJG)字段定义
 const SZ_SJJG_FIELDS = [
     { name: 'MXSJLX', len: 2, type: 'C', desc: '数据记录类型', default: '10', readonly: true },
@@ -960,12 +957,7 @@ const SZ_SJJG_FIELDS = [
     { name: 'MXZYDH', len: 4, type: 'C', desc: '摘要代号', user: true, placeholder: '摘要' }
 ];
 
-// 深圳明细结果文件(SJSJG)
-    'SJSJG-买入': { category: 'SJSJG', name: 'SJSJG', direction: '买入', icon: '📈', fileType: 'SJSJG', ywlb: 'JY00', zqlb: '55', autoSplit: false },
-    'SJSJG-卖出': { category: 'SJSJG', name: 'SJSJG', direction: '卖出', icon: '📉', fileType: 'SJSJG', ywlb: 'JY00', zqlb: '55', autoSplit: false },
-    'SJSJG-申购': { category: 'SJSJG', name: 'SJSJG', direction: '申购', icon: '🔄', fileType: 'SJSJG', ywlb: 'SGSF', zqlb: '55', autoSplit: false },
-    'SJSJG-赎回': { category: 'SJSJG', name: 'SJSJG', direction: '赎回', icon: '🔄', fileType: 'SJSJG', ywlb: 'SHSF', zqlb: '55', autoSplit: false }
-};
+// 深圳明细结果文件(SJSJG)字段定义
 
 // ============================================================
 // 上海JSMX字段定义 (48字段)
@@ -1497,12 +1489,12 @@ function showSplitPreview(bizType) {
                 return f.type + '(' + (f.label || f.ywlb || '') + ')';
             }).join(' + ');
             
-            html += \`
+            html += `
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px; background: var(--bg-input); border-radius: 4px;">
                     <span style="background: \${dateKey === 'T' ? 'var(--accent-blue)' : dateKey.includes('TN') ? 'var(--accent-purple)' : 'var(--accent-cyan)'}; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px;">\${dateLabel}</span>
                     <span style="color: var(--text-primary); font-size: 11px;">\${filesInfo}</span>
                 </div>
-            \`;
+            `;
         });
         
         previewDiv.style.display = 'block';
@@ -1510,16 +1502,16 @@ function showSplitPreview(bizType) {
     } else if (bizConfig.autoSplit && bizConfig.splitConfig && bizConfig.splitConfig.length > 0) {
         // 旧版拆分规则
         previewDiv.style.display = 'block';
-        previewDiv.innerHTML = \`
+        previewDiv.innerHTML = `
             <div style="font-size: 11px; color: var(--accent-yellow); margin-bottom: 8px;">📋 将自动拆分为以下\${bizConfig.splitConfig.length}条记录：</div>
-            \${bizConfig.splitConfig.map((split, i) => \`
+            \${bizConfig.splitConfig.map((split, i) => `
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px; background: var(--bg-input); border-radius: 4px;">
                     <span style="background: var(--accent-purple); color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px;">\${i + 1}</span>
                     <span style="color: var(--text-primary); font-size: 12px;">\${split.label}</span>
                     <span style="color: var(--text-secondary); font-size: 10px; margin-left: auto;">YWLX:\${split.ywlx}</span>
                 </div>
-            \`).join('')}
-        \`;
+            `).join('')}
+        `;
     } else {
         previewDiv.style.display = 'none';
     }
