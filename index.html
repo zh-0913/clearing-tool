@@ -1,0 +1,2516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>场内基金清算文件生成工具 V2.8</title>
+    <style>
+        :root {
+            --bg-primary: #0f1419;
+            --bg-secondary: #151b23;
+            --bg-card: #1a2027;
+            --bg-input: #242d38;
+            --border-color: #2d3844;
+            --text-primary: #e7e9ea;
+            --text-secondary: #71767b;
+            --text-muted: #536471;
+            --accent-blue: #1d9bf0;
+            --accent-green: #00ba7c;
+            --accent-orange: #ff7a00;
+            --accent-red: #f4212e;
+            --accent-purple: #7856ff;
+            --accent-cyan: #00d4d4;
+            --accent-yellow: #ffd60a;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header-left { display: flex; align-items: center; gap: 14px; }
+        .header-icon {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+        }
+        .header-title { font-size: 16px; font-weight: 600; }
+        .header-subtitle { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+        .header-right { display: flex; gap: 10px; }
+        .btn {
+            padding: 8px 16px; border-radius: 6px; border: none;
+            cursor: pointer; font-size: 13px; font-weight: 500;
+            transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--accent-blue), #1a5fb4); color: #fff; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-secondary { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: var(--border-color); }
+        .btn-success { background: linear-gradient(135deg, var(--accent-green), #00875a); color: #fff; }
+        .btn-success:hover { opacity: 0.9; }
+        .main-container { display: flex; height: calc(100vh - 65px); }
+        .left-panel {
+            width: 360px; background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex; flex-direction: column; overflow-y: auto;
+        }
+        .panel-section { padding: 14px 16px; border-bottom: 1px solid var(--border-color); }
+        .section-title {
+            font-size: 11px; color: var(--text-secondary);
+            font-weight: 500; margin-bottom: 10px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .section-title .num {
+            width: 18px; height: 18px;
+            background: var(--accent-blue); color: #fff;
+            border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-size: 10px;
+        }
+        .market-tabs { display: flex; gap: 6px; }
+        .market-tab {
+            flex: 1; padding: 10px;
+            background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            border-radius: 8px; cursor: pointer;
+            text-align: center; transition: all 0.2s;
+        }
+        .market-tab:hover { border-color: var(--accent-blue); }
+        .market-tab.active { border-color: var(--accent-blue); background: rgba(29, 155, 240, 0.1); }
+        .market-tab .name { font-size: 13px; font-weight: 600; }
+        .market-tab .code { font-size: 10px; color: var(--text-secondary); margin-top: 2px; }
+        
+        /* 业务类型搜索 */
+        .biz-search-box {
+            margin-bottom: 10px;
+        }
+        .biz-search-box input {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 12px;
+        }
+        .biz-search-box input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .biz-search-box input::placeholder {
+            color: var(--text-secondary);
+        }
+        .search-result-header {
+            padding: 8px 10px;
+            font-size: 12px;
+            color: var(--accent);
+            background: rgba(64, 158, 255, 0.1);
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        /* 业务分类折叠 */
+        .biz-category { margin-bottom: 10px; }
+        .biz-category-header {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 10px;
+            background: var(--bg-card);
+            border-radius: 6px; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .biz-category-header:hover { background: var(--border-color); }
+        .biz-category-header .icon { font-size: 14px; }
+        .biz-category-header .name { font-size: 12px; font-weight: 500; flex: 1; }
+        .biz-category-header .count {
+            font-size: 10px; color: var(--text-secondary);
+            background: var(--bg-input); padding: 2px 6px; border-radius: 10px;
+        }
+        .biz-category-header .arrow {
+            font-size: 10px; color: var(--text-secondary);
+            transition: transform 0.2s;
+        }
+        .biz-category-header.collapsed .arrow { transform: rotate(-90deg); }
+        .biz-category-items {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px;
+            padding: 8px 0 0 0;
+            overflow: hidden;
+            transition: max-height 0.3s;
+        }
+        .biz-category-items.collapsed { max-height: 0; padding-top: 0; }
+        .biz-item {
+            padding: 10px 8px; background: var(--bg-card);
+            border: 2px solid var(--border-color);
+            border-radius: 6px; cursor: pointer;
+            transition: all 0.2s; text-align: center;
+        }
+        .biz-item:hover { border-color: var(--accent-blue); }
+        .biz-item.active { border-color: var(--accent-green); background: rgba(0, 186, 124, 0.1); }
+        .biz-item .icon { font-size: 16px; margin-bottom: 4px; }
+        .biz-item .name { font-size: 11px; font-weight: 500; }
+        .biz-item .code { font-size: 9px; color: var(--text-secondary); margin-top: 2px; }
+        
+        .date-config { display: flex; flex-direction: column; gap: 8px; }
+        .date-row { display: flex; align-items: center; gap: 8px; }
+        .date-row label { width: 60px; font-size: 11px; color: var(--text-secondary); }
+        .date-row input {
+            flex: 1; padding: 8px 10px;
+            background: var(--bg-input); border: 1px solid var(--border-color);
+            border-radius: 4px; color: var(--text-primary); font-size: 12px;
+        }
+        .date-row input:focus { outline: none; border-color: var(--accent-blue); }
+        .day-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+        .day-tab {
+            padding: 6px 10px; background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px; font-size: 11px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .day-tab:hover { border-color: var(--accent-blue); }
+        .day-tab.active { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+        .date-preview { background: var(--bg-card); border-radius: 6px; padding: 10px; margin-top: 8px; }
+        .date-preview-title { font-size: 10px; color: var(--text-secondary); margin-bottom: 6px; }
+        .date-preview-items { display: flex; flex-direction: column; gap: 4px; }
+        .date-preview-item {
+            display: flex; justify-content: space-between;
+            font-size: 11px; padding: 4px 6px;
+            background: var(--bg-input); border-radius: 3px;
+        }
+        .date-preview-item .label { color: var(--text-secondary); }
+        .date-preview-item .value { color: var(--accent-cyan); font-weight: 500; }
+        .account-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .account-item { display: flex; flex-direction: column; gap: 4px; }
+        .account-item label { font-size: 10px; color: var(--text-secondary); }
+        .account-item input {
+            padding: 8px; background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px; color: var(--text-primary); font-size: 12px;
+        }
+        .account-item input:focus { outline: none; border-color: var(--accent-blue); }
+        .right-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .tab-nav {
+            display: flex; gap: 0; background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color); padding: 0 16px;
+        }
+        .tab-btn {
+            padding: 12px 20px; background: none; border: none;
+            color: var(--text-secondary); font-size: 13px;
+            cursor: pointer; border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+        .tab-content { flex: 1; overflow-y: auto; padding: 16px; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+        .biz-records { display: flex; flex-direction: column; gap: 12px; }
+        .record-card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 10px; overflow: hidden;
+        }
+        .record-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .record-title { display: flex; align-items: center; gap: 10px; }
+        .record-title .badge {
+            padding: 4px 10px; background: var(--accent-blue);
+            color: #fff; border-radius: 4px;
+            font-size: 11px; font-weight: 600;
+        }
+        .record-title .biz-type { font-size: 13px; font-weight: 500; }
+        .record-title .ywxx {
+            font-size: 11px; color: var(--text-secondary);
+            background: var(--bg-input); padding: 2px 8px; border-radius: 4px;
+        }
+        .split-hint {
+            font-size: 10px; color: var(--accent-yellow);
+            background: rgba(255, 214, 10, 0.1); padding: 4px 8px; border-radius: 4px;
+            margin-left: 10px; display: inline-block;
+        }
+        .sub-type-badge {
+            font-size: 10px; color: #fff;
+            background: var(--accent-purple); padding: 2px 8px; border-radius: 4px;
+            margin-left: 6px;
+        }
+        .record-actions { display: flex; gap: 6px; }
+        .record-actions button {
+            padding: 6px 12px; background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px; color: var(--text-primary);
+            font-size: 11px; cursor: pointer; transition: all 0.2s;
+        }
+        .record-actions button:hover { background: var(--border-color); }
+        .record-actions .delete-btn { background: rgba(244, 33, 46, 0.1); border-color: var(--accent-red); color: var(--accent-red); }
+        .record-actions .delete-btn:hover { background: var(--accent-red); color: #fff; }
+        .record-actions .sample-btn { background: rgba(120, 86, 255, 0.1); border-color: var(--accent-purple); color: var(--accent-purple); }
+        .record-actions .sample-btn:hover { background: var(--accent-purple); color: #fff; }
+        .field-form { padding: 16px; }
+        .field-section { margin-bottom: 16px; }
+        .field-section-title {
+            font-size: 11px; color: var(--text-secondary);
+            font-weight: 500; margin-bottom: 10px;
+            padding-bottom: 6px; border-bottom: 1px dashed var(--border-color);
+        }
+        .field-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 16px; }
+        .field-grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .field-row { display: flex; align-items: center; gap: 8px; }
+        .field-item {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+        }
+        .field-label { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+        .field-input {
+            padding: 8px 10px;
+            background: var(--bg-input); border: 1px solid var(--border-color);
+            border-radius: 4px; color: var(--text-primary); font-size: 12px;
+            font-family: 'Consolas', monospace;
+        }
+        .field-input:focus { outline: none; border-color: var(--accent-blue); }
+        .field-input.auto { background: rgba(29, 155, 240, 0.1); border-color: var(--accent-blue); }
+        .field-input.user { border-left: 3px solid var(--accent-green); }
+        .field-input.readonly { background: rgba(255, 122, 0, 0.1); border-color: var(--accent-orange); }
+        .field-length { font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+        .add-record-btn {
+            width: 100%; padding: 14px; background: var(--bg-card);
+            border: 2px dashed var(--border-color); border-radius: 8px;
+            color: var(--text-secondary); font-size: 13px;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .add-record-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+        .split-preview {
+            background: rgba(255, 214, 10, 0.1); border: 1px solid var(--accent-yellow);
+            border-radius: 8px; padding: 12px; margin-bottom: 12px;
+        }
+        .generate-section { padding: 16px; background: var(--bg-secondary); border-top: 1px solid var(--border-color); }
+        .generate-btn {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, var(--accent-green), #00875a);
+            border: none; border-radius: 8px; color: #fff;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .generate-btn:hover { opacity: 0.9; }
+        .output-section { margin-top: 16px; padding: 16px; background: var(--bg-card); border-radius: 8px; }
+        .output-title { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
+        .output-files { display: flex; flex-direction: column; gap: 8px; }
+        .output-file {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 12px; background: var(--bg-input); border-radius: 6px;
+        }
+        .output-file .name { font-size: 12px; color: var(--accent-cyan); font-family: 'Consolas', monospace; }
+        .output-file .info { display: flex; gap: 12px; align-items: center; }
+        .output-file .size { font-size: 11px; color: var(--text-secondary); }
+        .output-file .download-btn {
+            padding: 4px 10px; background: var(--accent-blue);
+            border: none; border-radius: 4px; color: #fff;
+            font-size: 11px; cursor: pointer;
+        }
+        .formula-hint {
+            background: rgba(29, 155, 240, 0.1); border: 1px solid var(--accent-blue);
+            border-radius: 4px; padding: 8px 10px;
+            font-size: 10px; color: var(--accent-cyan); margin-top: 10px;
+        }
+        .status-bar {
+            padding: 8px 16px; background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            display: flex; justify-content: space-between;
+            font-size: 11px; color: var(--text-secondary);
+        }
+        .empty-msg { text-align: center; padding: 40px; color: var(--text-secondary); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div class="header-icon">📊</div>
+            <div>
+                <div class="header-title">场内基金清算文件生成工具 V2.8</div>
+                <div class="header-subtitle">新增7种清算文件 | SJSZJ/SJSJG/DSFMX/gh/bgh/CIL/etftbk</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="btn btn-secondary" onclick="clearAll()">🗑️ 清空</button>
+            <button class="btn btn-success" onclick="downloadAll()">📦 打包下载</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="panel-section">
+                <div class="section-title"><span class="num">1</span>选择市场</div>
+                <div class="market-tabs">
+                    <div class="market-tab active" data-market="SH" onclick="selectMarket('SH')">
+                        <div class="name">🇨🇳 上海</div>
+                        <div class="code">上交所</div>
+                    </div>
+                    <div class="market-tab" data-market="SZ" onclick="selectMarket('SZ')">
+                        <div class="name">🇨🇳 深圳</div>
+                        <div class="code">深交所</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-section" style="flex: 1; overflow-y: auto;">
+                <div class="section-title"><span class="num">2</span>业务类型</div>
+                <div class="biz-search-box">
+                    <input type="text" id="bizSearch" placeholder="🔍 搜索业务类型..." oninput="updateBizGrid()">
+                </div>
+                <div id="bizGrid"></div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title"><span class="num">3</span>日期配置</div>
+                <div class="date-config">
+                    <div class="date-row">
+                        <label>起始日期</label>
+                        <input type="text" id="startDate" placeholder="YYYYMMDD" value="20260509" onchange="updateDatePreview()">
+                    </div>
+                    <div class="date-row">
+                        <label>生成天数</label>
+                        <div class="day-tabs">
+                            <span class="day-tab active" data-days="1" onclick="selectDays(1)">T日</span>
+                            <span class="day-tab" data-days="2" onclick="selectDays(2)">T+1日</span>
+                            <span class="day-tab" data-days="3" onclick="selectDays(3)">T+2日</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="date-preview" id="datePreview">
+                    <div class="date-preview-title">📅 日期预览</div>
+                    <div class="date-preview-items" id="datePreviewItems"></div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <div class="section-title"><span class="num">4</span>账户配置</div>
+                <div class="account-grid" id="accountConfig"></div>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="switchTab('records')">📋 清算记录</button>
+                <button class="tab-btn" onclick="switchTab('output')">📦 输出结果</button>
+            </div>
+
+            <div class="tab-content">
+                <div class="tab-pane active" id="tab-records">
+                    <div class="biz-records" id="bizRecords"></div>
+                    <div id="splitPreview" class="split-preview" style="display: none;"></div>
+                    <button class="add-record-btn" onclick="addRecord()">➕ 添加清算记录</button>
+                </div>
+                <div class="tab-pane" id="tab-output">
+                    <div class="output-section">
+                        <div class="output-title">✅ 已生成文件</div>
+                        <div class="output-files" id="outputFiles">
+                            <div class="empty-msg">暂无生成文件</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="generate-section">
+                <button class="generate-btn" onclick="generateAll()">⚡ 生成清算文件 <span id="genPreview"></span></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="statusInfo">就绪</span>
+        <span id="recordCount"></span>
+        <span>场内基金覆盖：ETF / LOF / REITS</span>
+    </div>
+
+<script>
+// ============================================================
+// DBF文件生成器（真正的dBase III格式）
+// ============================================================
+class DBFWriter {
+    constructor(fields) {
+        this.fields = fields;
+        this.records = [];
+    }
+    addRecord(values) { this.records.push(values); }
+    generate() {
+        let data = '';
+        const version = 3;
+        const now = new Date();
+        const year = now.getFullYear() - 1900;
+        const month = now.getMonth() + 1;
+        const day = now.getDate();
+        const recordCount = this.records.length;
+        const headerSize = 32 + this.fields.length * 32 + 1;
+        let recordLen = 1;
+        this.fields.forEach(f => recordLen += f.len);
+        const dataSize = recordLen * recordCount;
+        
+        // 文件头 (32 bytes)
+        data += String.fromCharCode(version);
+        data += String.fromCharCode(year);
+        data += String.fromCharCode(month);
+        data += String.fromCharCode(day);
+        for (let i = 0; i < 4; i++) data += String.fromCharCode((recordCount >> (i * 8)) & 0xFF);
+        for (let i = 0; i < 2; i++) data += String.fromCharCode((headerSize >> (i * 8)) & 0xFF);
+        for (let i = 0; i < 2; i++) data += String.fromCharCode((recordLen >> (i * 8)) & 0xFF);
+        for (let i = 0; i < 20; i++) data += '\0';
+        
+        // 字段描述子
+        this.fields.forEach(f => {
+            const name = f.name.substring(0, 11);
+            for (let i = 0; i < 11; i++) data += (name.charCodeAt(i) ? String.fromCharCode(name.charCodeAt(i)) : '\0');
+            data += f.type;
+            data += '\0';
+            data += String.fromCharCode(f.len);
+            data += String.fromCharCode(f.dec || 0);
+            for (let i = 0; i < 14; i++) data += '\0';
+        });
+        data += '\r';
+        
+        // 数据记录
+        this.records.forEach(record => {
+            data += ' ';
+            this.fields.forEach((f, i) => {
+                let val = String(record[i] || '').substring(0, f.len);
+                if (f.type === 'N') val = val.padStart(f.len, ' ');
+                else val = val.padEnd(f.len, ' ');
+                data += val;
+            });
+        });
+        data += '\x1A';
+        return data;
+    }
+}
+
+// ============================================================
+// 场内基金清算文件生成工具 V2.8
+// 数据来源：交易所官方数据接口规范（JSMX字段规范）
+// 更新说明：
+// - 新增7种清算文件DBF生成功能：
+//   深圳：SJSZJ(资金变动)、SJSJG(明细结果)、DSFMX(实时代收代付明细)
+//   上海：gh(竞价过户)、bgh(综合业务过户)、CIL(现金差额)、etftbk(ETF退补款)
+// ============================================================
+
+let currentMarket = 'SH';
+let currentBizType = null;
+let selectedDays = [1];
+let records = [];
+let recordIdCounter = 1;
+let generatedFiles = [];
+
+// ============================================================
+// 上海单市场ETF申购自动拆分配置
+// 一笔ETF申购交易会触发3种清算数据
+// ============================================================
+const SH_ETF_PURCHASE_SPLIT = [
+    { subType: '份额', ywlx: '500', jllx: '001', qsbz: '   ', ghlx: '007', jyfs: '   ', label: '份额申购(500)' },
+    { subType: '成分股过户', ywlx: '502', jllx: '001', qsbz: '055', ghlx: '007', jyfs: '   ', label: '成分股过户(502)' },
+    { subType: '现金替代', ywlx: '504', jllx: '001', qsbz: '277', ghlx: '   ', jyfs: '104', label: '现金替代(504)' }
+];
+
+// 上海单市场ETF赎回自动拆分配置
+const SH_ETF_REDEEM_SPLIT = [
+    { subType: '份额', ywlx: '501', jllx: '001', qsbz: '   ', ghlx: '007', jyfs: '   ', label: '份额赎回(501)' },
+    { subType: '成分股过户', ywlx: '503', jllx: '001', qsbz: '055', ghlx: '007', jyfs: '104', label: '成分股过户(503)' },
+    { subType: '现金替代', ywlx: '505', jllx: '001', qsbz: '277', ghlx: '   ', jyfs: '104', label: '现金替代(505)' }
+];
+
+// ============================================================
+// 上海市场完整业务配置（按证券类别细分）
+// ============================================================
+const SH_BUSINESS_CONFIG = {
+    // ETF - 单市场股票ETF（买入/卖出，不拆分）
+    '单市场ETF-买入': { category: 'ETF', name: '单市场ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '55', autoSplit: false },
+    '单市场ETF-卖出': { category: 'ETF', name: '单市场ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '55', autoSplit: false },
+    
+    // 申购/赎回自动拆分为3条记录
+    '单市场ETF-申购': { category: 'ETF', name: '单市场ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', zqlb: '55', autoSplit: true, splitConfig: SH_ETF_PURCHASE_SPLIT },
+    '单市场ETF-赎回': { category: 'ETF', name: '单市场ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', zqlb: '55', autoSplit: true, splitConfig: SH_ETF_REDEEM_SPLIT },
+    
+    // ETF - 跨市场股票ETF
+    '跨市场ETF-买入': { category: 'ETF', name: '跨市场ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '58', autoSplit: false },
+    '跨市场ETF-卖出': { category: 'ETF', name: '跨市场ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '58', autoSplit: false },
+    '跨市场ETF-申购': { category: 'ETF', name: '跨市场ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '58', autoSplit: true, splitConfig: SH_ETF_PURCHASE_SPLIT },
+    '跨市场ETF-赎回': { category: 'ETF', name: '跨市场ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '58', autoSplit: true, splitConfig: SH_ETF_REDEEM_SPLIT },
+    
+    // ETF - 跨境ETF
+    '跨境ETF-买入': { category: 'ETF', name: '跨境ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '57', autoSplit: false },
+    '跨境ETF-卖出': { category: 'ETF', name: '跨境ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '57', autoSplit: false },
+    '跨境ETF-申购': { category: 'ETF', name: '跨境ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '57', autoSplit: true, splitConfig: SH_ETF_PURCHASE_SPLIT },
+    '跨境ETF-赎回': { category: 'ETF', name: '跨境ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '57', autoSplit: true, splitConfig: SH_ETF_REDEEM_SPLIT },
+    
+    // ETF - 债券ETF(实物申赎)
+    '债券ETF实物-买入': { category: 'ETF', name: '债券ETF(实物)', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '82', autoSplit: false },
+    '债券ETF实物-卖出': { category: 'ETF', name: '债券ETF(实物)', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '82', autoSplit: false },
+    
+    // ETF - 债券ETF(现金申赎)
+    '债券ETF现金-买入': { category: 'ETF', name: '债券ETF(现金)', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '83', autoSplit: false },
+    '债券ETF现金-卖出': { category: 'ETF', name: '债券ETF(现金)', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '83', autoSplit: false },
+    '债券ETF现金-申购': { category: 'ETF', name: '债券ETF(现金)', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '83', autoSplit: false },
+    '债券ETF现金-赎回': { category: 'ETF', name: '债券ETF(现金)', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '83', autoSplit: false },
+    
+    // ETF - 黄金ETF
+    '黄金ETF-买入': { category: 'ETF', name: '黄金ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '84', autoSplit: false },
+    '黄金ETF-卖出': { category: 'ETF', name: '黄金ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '84', autoSplit: false },
+    '黄金ETF-申购': { category: 'ETF', name: '黄金ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '84', autoSplit: false },
+    '黄金ETF-赎回': { category: 'ETF', name: '黄金ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '84', autoSplit: false },
+    
+    // ETF - 商品期货ETF
+    '商品期货ETF-买入': { category: 'ETF', name: '商品期货ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '125', autoSplit: false },
+    '商品期货ETF-卖出': { category: 'ETF', name: '商品期货ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '125', autoSplit: false },
+    '商品期货ETF-申购': { category: 'ETF', name: '商品期货ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '125', autoSplit: false },
+    '商品期货ETF-赎回': { category: 'ETF', name: '商品期货ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '125', autoSplit: false },
+    
+    // ETF - 货币ETF
+    '货币ETF-买入': { category: 'ETF', name: '货币ETF', direction: '买入', icon: '💰', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '77', autoSplit: false },
+    '货币ETF-卖出': { category: 'ETF', name: '货币ETF', direction: '卖出', icon: '💰', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '77', autoSplit: false },
+    '货币ETF-申购': { category: 'ETF', name: '货币ETF', direction: '申购', icon: '💰', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '77', autoSplit: false },
+    '货币ETF-赎回': { category: 'ETF', name: '货币ETF', direction: '赎回', icon: '💰', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '77', autoSplit: false },
+    
+    // ETF - 沪深港京ETF
+    '沪深港京ETF-买入': { category: 'ETF', name: '沪深港京ETF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '142', autoSplit: false },
+    '沪深港京ETF-卖出': { category: 'ETF', name: '沪深港京ETF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '104', qsbz: '05B', zqlb: '142', autoSplit: false },
+    '沪深港京ETF-申购': { category: 'ETF', name: '沪深港京ETF', direction: '申购', icon: '🔄', fileType: 'JSMX', ywlx: '500', qsbz: '05B', zqlb: '142', autoSplit: true, splitConfig: SH_ETF_PURCHASE_SPLIT },
+    '沪深港京ETF-赎回': { category: 'ETF', name: '沪深港京ETF', direction: '赎回', icon: '🔄', fileType: 'JSMX', ywlx: '501', qsbz: '05B', zqlb: '142', autoSplit: true, splitConfig: SH_ETF_REDEEM_SPLIT },
+    
+    // LOF
+    'LOF-买入': { category: 'LOF', name: 'LOF', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '034', qsbz: '05B', zqlb: '', autoSplit: false },
+    'LOF-卖出': { category: 'LOF', name: 'LOF', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '034', qsbz: '05B', zqlb: '', autoSplit: false },
+    'LOF-认购': { category: 'LOF', name: 'LOF', direction: '认购', icon: '🎯', fileType: 'KF1', ywlx: '020', zqlb: '', autoSplit: false },
+    
+    // REITS
+    'REITS-买入': { category: 'REITS', name: 'REITS', direction: '买入', icon: '📈', fileType: 'JSMX', ywlx: '034', qsbz: '05B', zqlb: '', autoSplit: false },
+    'REITS-卖出': { category: 'REITS', name: 'REITS', direction: '卖出', icon: '📉', fileType: 'JSMX', ywlx: '034', qsbz: '05B', zqlb: '', autoSplit: false },
+    'REITS-认购': { category: 'REITS', name: 'REITS', direction: '认购', icon: '🏢', fileType: 'KF1', ywlx: '020', zqlb: '', autoSplit: false },
+    
+    // 上海竞价过户文件(gh)
+    'gh-买入': { category: 'GH', name: '竞价过户', direction: '买入', icon: '📈', fileType: 'GH', ywlx: '104', autoSplit: false },
+    'gh-卖出': { category: 'GH', name: '竞价过户', direction: '卖出', icon: '📉', fileType: 'GH', ywlx: '104', autoSplit: false },
+    
+    // 上海综合业务过户文件(bgh)
+    'bgh-ETF申购': { category: 'BGH', name: '综合业务过户', direction: 'ETF申购', icon: '📥', fileType: 'BGH', ywlx: '500', autoSplit: false },
+    'bgh-ETF赎回': { category: 'BGH', name: '综合业务过户', direction: 'ETF赎回', icon: '📤', fileType: 'BGH', ywlx: '501', autoSplit: false },
+    
+    // 上海现金差额文件(CIL)
+    'CIL-现金差额': { category: 'CIL', name: '现金差额', direction: '补退', icon: '💹', fileType: 'CIL', autoSplit: false },
+    
+    // 上海ETF退补款文件(etftbk)
+    'etftbk-ETF退补款': { category: 'ETFTBK', name: 'ETF退补款', direction: '退补', icon: '💸', fileType: 'ETFTBK', autoSplit: false }
+};
+
+// ============================================================
+// 深圳ETF申赎自动拆分配置（YWLB固定为SGSF/SHSF）
+// 深圳ETF申赎不需要像上海那样拆分YWLX
+// ============================================================
+
+// ============================================================
+// 深圳市场完整业务配置（按证券类别细分）
+// ============================================================
+const SZ_BUSINESS_CONFIG = {
+    // LOF
+    'LOF-买入': { category: 'LOF', name: 'LOF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'QPOW', zqlb: '', autoSplit: false },
+    'LOF-卖出': { category: 'LOF', name: 'LOF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'QPSW', zqlb: '', autoSplit: false },
+    'LOF-认购': { category: 'LOF', name: 'LOF', direction: '认购', icon: '🎯', fileType: 'SJSFX', ywlb: 'FXA0', zqlb: '', autoSplit: false },
+    'LOF-认购确认': { category: 'LOF', name: 'LOF', direction: '认购确认', icon: '✅', fileType: 'SJSFX', ywlb: 'FXA3', zqlb: '', autoSplit: false },
+    'LOF-认购无效': { category: 'LOF', name: 'LOF', direction: '认购无效', icon: '❌', fileType: 'SJSFX', ywlb: 'FXA6', zqlb: '', autoSplit: false },
+    
+    // REITS
+    'REITS-买入': { category: 'REITS', name: 'REITS', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'QPOW', zqlb: '', autoSplit: false },
+    'REITS-卖出': { category: 'REITS', name: 'REITS', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'QPSW', zqlb: '', autoSplit: false },
+    'REITS-认购': { category: 'REITS', name: 'REITS', direction: '认购', icon: '🏢', fileType: 'SJSFX', ywlb: 'FXA0', zqlb: '', autoSplit: false },
+    'REITS-认购确认': { category: 'REITS', name: 'REITS', direction: '认购确认', icon: '✅', fileType: 'SJSFX', ywlb: 'FXA3', zqlb: '', autoSplit: false },
+    
+    // ETF - 单市场
+    '单市场ETF-买入': { category: 'ETF', name: '单市场ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '55', autoSplit: false },
+    '单市场ETF-卖出': { category: 'ETF', name: '单市场ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '55', autoSplit: false },
+    '单市场ETF-申购': { category: 'ETF', name: '单市场ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '55', autoSplit: false },
+    '单市场ETF-赎回': { category: 'ETF', name: '单市场ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '55', autoSplit: false },
+    
+    // ETF - 跨市场
+    '跨市场ETF-买入': { category: 'ETF', name: '跨市场ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '58', autoSplit: false },
+    '跨市场ETF-卖出': { category: 'ETF', name: '跨市场ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '58', autoSplit: false },
+    '跨市场ETF-申购': { category: 'ETF', name: '跨市场ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '58', autoSplit: false },
+    '跨市场ETF-赎回': { category: 'ETF', name: '跨市场ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '58', autoSplit: false },
+    
+    // ETF - 跨境
+    '跨境ETF-买入': { category: 'ETF', name: '跨境ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '57', autoSplit: false },
+    '跨境ETF-卖出': { category: 'ETF', name: '跨境ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '57', autoSplit: false },
+    '跨境ETF-申购': { category: 'ETF', name: '跨境ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '57', autoSplit: false },
+    '跨境ETF-赎回': { category: 'ETF', name: '跨境ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '57', autoSplit: false },
+    
+    // ETF - 实物债券
+    '债券ETF实物-买入': { category: 'ETF', name: '债券ETF(实物)', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '82', autoSplit: false },
+    '债券ETF实物-卖出': { category: 'ETF', name: '债券ETF(实物)', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '82', autoSplit: false },
+    
+    // ETF - 现金债券
+    '债券ETF现金-买入': { category: 'ETF', name: '债券ETF(现金)', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '83', autoSplit: false },
+    '债券ETF现金-卖出': { category: 'ETF', name: '债券ETF(现金)', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '83', autoSplit: false },
+    '债券ETF现金-申购': { category: 'ETF', name: '债券ETF(现金)', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '83', autoSplit: false },
+    '债券ETF现金-赎回': { category: 'ETF', name: '债券ETF(现金)', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '83', autoSplit: false },
+    
+    // ETF - 黄金
+    '黄金ETF-买入': { category: 'ETF', name: '黄金ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '84', autoSplit: false },
+    '黄金ETF-卖出': { category: 'ETF', name: '黄金ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '84', autoSplit: false },
+    '黄金ETF-申购': { category: 'ETF', name: '黄金ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '84', autoSplit: false },
+    '黄金ETF-赎回': { category: 'ETF', name: '黄金ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '84', autoSplit: false },
+    
+    // ETF - 货币
+    '货币ETF-买入': { category: 'ETF', name: '货币ETF', direction: '买入', icon: '💰', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '77', autoSplit: false },
+    '货币ETF-卖出': { category: 'ETF', name: '货币ETF', direction: '卖出', icon: '💰', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '77', autoSplit: false },
+    '货币ETF-申购': { category: 'ETF', name: '货币ETF', direction: '申购', icon: '💰', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '77', autoSplit: false },
+    '货币ETF-赎回': { category: 'ETF', name: '货币ETF', direction: '赎回', icon: '💰', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '77', autoSplit: false },
+    
+    // ETF - 深港通
+    '深港通ETF-买入': { category: 'ETF', name: '深港通ETF', direction: '买入', icon: '📈', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '107', autoSplit: false },
+    '深港通ETF-卖出': { category: 'ETF', name: '深港通ETF', direction: '卖出', icon: '📉', fileType: 'SJSMX', ywlb: 'JY00', zqlb: '107', autoSplit: false },
+    '深港通ETF-申购': { category: 'ETF', name: '深港通ETF', direction: '申购', icon: '🔄', fileType: 'SJSMX', ywlb: 'SGSF', zqlb: '107', autoSplit: false },
+    '深港通ETF-赎回': { category: 'ETF', name: '深港通ETF', direction: '赎回', icon: '🔄', fileType: 'SJSMX', ywlb: 'SHSF', zqlb: '107', autoSplit: false },
+    
+    // 深圳资金变动文件(SJSZJ)
+    'SJSZJ-资金申购': { category: 'SJSZJ', name: 'SJSZJ', direction: '资金申购', icon: '💰', fileType: 'SJSZJ', ywlb: 'ZJSG', autoSplit: false },
+    'SJSZJ-资金赎回': { category: 'SJSZJ', name: 'SJSZJ', direction: '资金赎回', icon: '💵', fileType: 'SJSZJ', ywlb: 'ZJSH', autoSplit: false },
+    'SJSZJ-资金买卖': { category: 'SJSZJ', name: 'SJSZJ', direction: '资金买卖', icon: '💱', fileType: 'SJSZJ', ywlb: 'ZJMM', autoSplit: false },
+    
+    // 深圳实时代收代付明细(DSFMX)
+    'DSFMX-ETF申购': { category: 'DSFMX', name: 'DSFMX', direction: 'ETF申购', icon: '📥', fileType: 'DSFMX', ywlb: 'DSES', autoSplit: false },
+    'DSFMX-ETF赎回': { category: 'DSFMX', name: 'DSFMX', direction: 'ETF赎回', icon: '📤', fileType: 'DSFMX', ywlb: 'DSES', autoSplit: false },
+    
+    // 深圳明细结果文件(SJSJG)
+    'SJSJG-买入': { category: 'SJSJG', name: 'SJSJG', direction: '买入', icon: '📈', fileType: 'SJSJG', ywlb: 'JY00', zqlb: '55', autoSplit: false },
+    'SJSJG-卖出': { category: 'SJSJG', name: 'SJSJG', direction: '卖出', icon: '📉', fileType: 'SJSJG', ywlb: 'JY00', zqlb: '55', autoSplit: false },
+    'SJSJG-申购': { category: 'SJSJG', name: 'SJSJG', direction: '申购', icon: '🔄', fileType: 'SJSJG', ywlb: 'SGSF', zqlb: '55', autoSplit: false },
+    'SJSJG-赎回': { category: 'SJSJG', name: 'SJSJG', direction: '赎回', icon: '🔄', fileType: 'SJSJG', ywlb: 'SHSF', zqlb: '55', autoSplit: false }
+};
+
+// ============================================================
+// 上海JSMX字段定义 (48字段)
+// ============================================================
+const SH_JSMX_FIELDS = [
+    { name: 'SCDM', len: 2, type: 'C', desc: '市场代码', default: '01', readonly: true },
+    { name: 'JLLX', len: 3, type: 'C', desc: '记录类型', default: '001', readonly: false, placeholder: '001' },
+    { name: 'JYFS', len: 3, type: 'C', desc: '交易方式', default: '001', readonly: false, placeholder: '001' },
+    { name: 'JSFS', len: 3, type: 'C', desc: '交收方式', default: '001', readonly: true },
+    { name: 'YWLX', len: 3, type: 'C', desc: '业务类型', user: true, placeholder: '104/500/501' },
+    { name: 'QSBZ', len: 3, type: 'C', desc: '清算标志', user: true, placeholder: '05B/055/277' },
+    { name: 'GHLX', len: 3, type: 'C', desc: '过户类型', readonly: false },
+    { name: 'JSBH', len: 16, type: 'C', desc: '交收编号', readonly: true },
+    { name: 'CJBH', len: 16, type: 'C', desc: '成交编号', user: true, placeholder: '成交编号' },
+    { name: 'SQBH', len: 16, type: 'C', desc: '申请编号', readonly: true },
+    { name: 'WTBH', len: 16, type: 'C', desc: '委托编号', user: true, placeholder: '委托编号' },
+    { name: 'JYRQ', len: 8, type: 'C', desc: '交易日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'QSRQ', len: 8, type: 'C', desc: '清算日期', auto: true, date: true },
+    { name: 'JSRQ', len: 8, type: 'C', desc: '交收日期', auto: true, date: true },
+    { name: 'QTRQ', len: 8, type: 'C', desc: '其它日期', readonly: true },
+    { name: 'WTSJ', len: 6, type: 'C', desc: '委托时间', readonly: true },
+    { name: 'CJSJ', len: 6, type: 'C', desc: '成交时间', readonly: true },
+    { name: 'XWH1', len: 5, type: 'C', desc: '业务单元1', user: true, placeholder: '席位号' },
+    { name: 'XWH2', len: 5, type: 'C', desc: '业务单元2', readonly: true },
+    { name: 'XWHY', len: 8, type: 'C', desc: '所属编号', user: true, placeholder: '结算编号' },
+    { name: 'JSHY', len: 8, type: 'C', desc: '结算参与人', user: true, placeholder: '结算编号' },
+    { name: 'TGHY', len: 8, type: 'C', desc: '托管银行', readonly: true },
+    { name: 'ZQZH', len: 10, type: 'C', desc: '证券账号', user: true, placeholder: '股东账号' },
+    { name: 'ZQDM1', len: 6, type: 'C', desc: '证券代码', user: true, placeholder: 'ETF代码' },
+    { name: 'ZQDM2', len: 6, type: 'C', desc: '证券代码2', readonly: true },
+    { name: 'ZQLB', len: 2, type: 'C', desc: '证券类别', user: true, placeholder: '55/58/57' },
+    { name: 'LTLX', len: 1, type: 'C', desc: '流通类型', readonly: true },
+    { name: 'QYLB', len: 2, type: 'C', desc: '权益类别', readonly: true },
+    { name: 'GPNF', len: 4, type: 'C', desc: '挂牌年份', readonly: true },
+    { name: 'MMBZ', len: 1, type: 'C', desc: '买卖标志', user: true, placeholder: 'B买入/S卖出' },
+    { name: 'SL', len: 16, type: 'N', desc: '交收数量', user: true, placeholder: '数量' },
+    { name: 'CJSL', len: 16, type: 'N', desc: '成交数量', user: true, placeholder: '数量' },
+    { name: 'ZJZH', len: 25, type: 'C', desc: '资金账号', user: true, placeholder: '资金账号' },
+    { name: 'BZ', len: 3, type: 'C', desc: '币种', default: 'RMB', readonly: true },
+    { name: 'JG1', len: 17, type: 'N', desc: '价格1', user: true, placeholder: '价格' },
+    { name: 'JG2', len: 17, type: 'N', desc: '价格2', readonly: true },
+    { name: 'QSJE', len: 19, type: 'N', desc: '清算金额', user: true, placeholder: '金额' },
+    { name: 'YHS', len: 17, type: 'N', desc: '印花税', user: true, placeholder: '0' },
+    { name: 'JSF', len: 17, type: 'N', desc: '经手费', user: true, placeholder: '费用' },
+    { name: 'GHF', len: 17, type: 'N', desc: '过户费', user: true, placeholder: '0' },
+    { name: 'ZGF', len: 17, type: 'N', desc: '证管费', user: true, placeholder: '费用' },
+    { name: 'SXF', len: 17, type: 'N', desc: '手续费', user: true, placeholder: '费用' },
+    { name: 'QTJE1', len: 19, type: 'N', desc: '其它金额1', readonly: true },
+    { name: 'QTJE2', len: 19, type: 'N', desc: '其它金额2', readonly: true },
+    { name: 'QTJE3', len: 19, type: 'N', desc: '其它金额3', readonly: true },
+    { name: 'SJSF', len: 19, type: 'N', desc: '实际收付', auto: true },
+    { name: 'JGDM', len: 4, type: 'C', desc: '结果代码', default: '0000', readonly: true },
+    { name: 'FJSM', len: 40, type: 'C', desc: '附加说明', readonly: true }
+];
+
+// ============================================================
+// 上海KF1字段定义 (11字段)
+// ============================================================
+const SH_KF1_FIELDS = [
+    { name: 'QSBH', len: 16, type: 'C', desc: '清算编号', user: true, placeholder: '清算编号' },
+    { name: 'JJDM', len: 6, type: 'C', desc: '基金代码', user: true, placeholder: '基金代码' },
+    { name: 'YWLX', len: 3, type: 'C', desc: '业务类型', user: true, placeholder: '020' },
+    { name: 'ZQZH', len: 10, type: 'C', desc: '基金账号', user: true, placeholder: '基金账号' },
+    { name: 'ZJZH', len: 25, type: 'C', desc: '资金账号', user: true, placeholder: '资金账号' },
+    { name: 'QSRQ', len: 8, type: 'C', desc: '清算日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'JSRQ', len: 8, type: 'C', desc: '交收日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'CJSL', len: 16, type: 'N', desc: '成交数量', user: true, placeholder: '数量' },
+    { name: 'CJJE', len: 17, type: 'N', desc: '成交金额', user: true, placeholder: '金额' },
+    { name: 'FKFS', len: 1, type: 'C', desc: '付款方式', default: '1', readonly: true },
+    { name: 'JZFS', len: 1, type: 'C', desc: '记账方式', default: '1', readonly: true }
+];
+
+// ============================================================
+// 深圳SJSMX字段定义 (34字段)
+// ============================================================
+const SZ_SJSMX_FIELDS = [
+    { name: 'MXJSZH', len: 6, type: 'C', desc: '结算账号', user: true, placeholder: '结算账号' },
+    { name: 'MXBFZH', len: 25, type: 'C', desc: '备付金账户', user: true, placeholder: '备付金账号' },
+    { name: 'MXSJLX', len: 2, type: 'C', desc: '数据类型', default: '10', readonly: true },
+    { name: 'MXYWLB', len: 4, type: 'C', desc: '业务类别', user: true, placeholder: 'JY00/SGSF/SHSF' },
+    { name: 'MXZQDM', len: 8, type: 'C', desc: '证券代码', user: true, placeholder: 'ETF代码' },
+    { name: 'MXJYDY', len: 6, type: 'C', desc: '交易单元', user: true, placeholder: '交易单元' },
+    { name: 'MXTGDY', len: 6, type: 'C', desc: '托管单元', user: true, placeholder: '托管单元' },
+    { name: 'MXZQZH', len: 20, type: 'C', desc: '证券账户', user: true, placeholder: '证券账户' },
+    { name: 'MXDDBH', len: 24, type: 'C', desc: '订单编号', readonly: true },
+    { name: 'MXYYB', len: 4, type: 'C', desc: '营业部代码', readonly: true },
+    { name: 'MXZXBH', len: 16, type: 'C', desc: '执行编号', readonly: true },
+    { name: 'MXYWLSH', len: 16, type: 'C', desc: '业务流水号', readonly: true },
+    { name: 'MXCJSL', len: 15, type: 'N', desc: '成交数量', user: true, placeholder: '数量' },
+    { name: 'MXQSSL', len: 15, type: 'N', desc: '清算数量', auto: true },
+    { name: 'MXCJJG', len: 13, type: 'N', desc: '成交价格', user: true, placeholder: '价格' },
+    { name: 'MXQSJG', len: 18, type: 'N', desc: '清算价格', auto: true },
+    { name: 'MXXYJY', len: 1, type: 'C', desc: '信用交易', readonly: true },
+    { name: 'MXPCBS', len: 1, type: 'C', desc: '平仓标识', readonly: true },
+    { name: 'MXZQLB', len: 2, type: 'C', desc: '证券类别', user: true, placeholder: '55/58/57' },
+    { name: 'MXZQZL', len: 2, type: 'C', desc: '证券子类别', readonly: true },
+    { name: 'MXGFXZ', len: 2, type: 'C', desc: '股份性质', readonly: true },
+    { name: 'MXJSFS', len: 1, type: 'C', desc: '交收方式', user: true, placeholder: '1' },
+    { name: 'MXHBDH', len: 3, type: 'C', desc: '货币代号', default: 'RMB', readonly: true },
+    { name: 'MXQSBJ', len: 17, type: 'N', desc: '清算本金', user: true, placeholder: '金额' },
+    { name: 'MXYHS', len: 12, type: 'N', desc: '印花税', user: true, placeholder: '0' },
+    { name: 'MXJYJSF', len: 12, type: 'N', desc: '交易经手费', user: true, placeholder: '费用' },
+    { name: 'MXJGGF', len: 12, type: 'N', desc: '监管规费', user: true, placeholder: '费用' },
+    { name: 'MXGHF', len: 12, type: 'N', desc: '过户费', readonly: true },
+    { name: 'MXJSF', len: 12, type: 'N', desc: '结算费', user: true, placeholder: '费用' },
+    { name: 'MXSXF', len: 12, type: 'N', desc: '手续费', user: true, placeholder: '费用' },
+    { name: 'MXQSYJ', len: 12, type: 'N', desc: '参与人佣金', readonly: true },
+    { name: 'MXQTFY', len: 12, type: 'N', desc: '其他费用', readonly: true },
+    { name: 'MXZJJE', len: 17, type: 'N', desc: '资金金额', user: true, placeholder: '0' },
+    { name: 'MXSFJE', len: 17, type: 'N', desc: '收付净额', auto: true }
+];
+
+// ============================================================
+// 深圳SJSFX字段定义 (认购数据)
+// ============================================================
+const SZ_SJSFX_FIELDS = [
+    { name: 'FXJSZH', len: 6, type: 'C', desc: '结算账号', user: true, placeholder: '结算账号' },
+    { name: 'FXBFZH', len: 25, type: 'C', desc: '备付金账户', user: true, placeholder: '备付金账号' },
+    { name: 'FXSJLX', len: 2, type: 'C', desc: '数据类型', default: '20', readonly: true },
+    { name: 'FXYWLB', len: 4, type: 'C', desc: '业务类别', user: true, placeholder: 'FXA0/FXA3' },
+    { name: 'FXZQDM', len: 8, type: 'C', desc: '基金代码', user: true, placeholder: '基金代码' },
+    { name: 'FXJYDY', len: 6, type: 'C', desc: '交易单元', user: true, placeholder: '交易单元' },
+    { name: 'FXTGDY', len: 6, type: 'C', desc: '托管单元', user: true, placeholder: '托管单元' },
+    { name: 'FXZQZH', len: 20, type: 'C', desc: '基金账户', user: true, placeholder: '基金账户' },
+    { name: 'FXDDBH', len: 24, type: 'C', desc: '订单编号', readonly: true },
+    { name: 'FXYYB', len: 4, type: 'C', desc: '营业部代码', readonly: true },
+    { name: 'FXCJRQ', len: 8, type: 'C', desc: '交易日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'FXQSRQ', len: 8, type: 'C', desc: '清算日期', auto: true, date: true },
+    { name: 'FXJSRQ', len: 8, type: 'C', desc: '交收日期', auto: true, date: true },
+    { name: 'FXCJSL', len: 15, type: 'N', desc: '认购数量', user: true, placeholder: '数量' },
+    { name: 'FXQSJE', len: 17, type: 'N', desc: '清算金额', user: true, placeholder: '金额' },
+    { name: 'FXYHS', len: 12, type: 'N', desc: '印花税', readonly: true },
+    { name: 'FXJSF', len: 12, type: 'N', desc: '经手费', user: true, placeholder: '费用' },
+    { name: 'FXGHF', len: 12, type: 'N', desc: '过户费', readonly: true },
+    { name: 'FXJGGF', len: 12, type: 'N', desc: '监管规费', user: true, placeholder: '费用' },
+    { name: 'FXSXF', len: 12, type: 'N', desc: '手续费', user: true, placeholder: '费用' },
+    { name: 'FXQTFY', len: 12, type: 'N', desc: '其他费用', readonly: true },
+    { name: 'FXSFJE', len: 17, type: 'N', desc: '收付金额', auto: true }
+];
+
+// ============================================================
+// 深圳SJSZJ字段定义 (资金变动库) - 10字段
+// 文件命名: SJSZJ_{YWLB}_{日期}.dbf
+// ============================================================
+const SZ_SJSZJ_FIELDS = [
+    { name: 'ZJZJZH', len: 25, type: 'C', desc: '资金账号', user: true, placeholder: '资金账号' },
+    { name: 'ZJYWLB', len: 4, type: 'C', desc: '资金业务类别', user: true, placeholder: 'YWLB' },
+    { name: 'ZJLSH', len: 16, type: 'C', desc: '资金流水号', user: true, placeholder: '流水号' },
+    { name: 'ZJFSJE', len: 17, type: 'N', desc: '发生金额', user: true, placeholder: '金额', dec: 2 },
+    { name: 'ZJTGDY', len: 6, type: 'C', desc: '托管单元', user: true, placeholder: '托管单元' },
+    { name: 'ZJZQDM', len: 8, type: 'C', desc: '证券代码', user: true, placeholder: '证券代码' },
+    { name: 'ZJJZRQ', len: 8, type: 'C', desc: '记账日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'ZJBZSM', len: 60, type: 'C', desc: '备注说明', user: true, placeholder: '备注' },
+    { name: 'ZJBYZD', len: 60, type: 'C', desc: '备用字段', user: true, placeholder: '备用' },
+    { name: 'ZJBYBZ', len: 1, type: 'C', desc: '备用标志', user: true, placeholder: '0' }
+];
+
+// ============================================================
+// 深圳DSFMX字段定义 (实时代收代付明细库) - 33字段
+// 文件命名: DSFMX_{日期}.dbf
+// ============================================================
+const SZ_DSFMX_FIELDS = [
+    { name: 'MXSXH', len: 10, type: 'N', desc: '序号', user: true, placeholder: '序号' },
+    { name: 'MXFFJS', len: 6, type: 'C', desc: '发生结算账号', user: true, placeholder: '结算账号' },
+    { name: 'MXFFTG', len: 6, type: 'C', desc: '发生托管单元', user: true, placeholder: '托管单元' },
+    { name: 'MXFTGM', len: 20, type: 'C', desc: '发生托管账号', user: true, placeholder: '托管账号' },
+    { name: 'MXFFJY', len: 100, type: 'C', desc: '发生交易席位', user: true, placeholder: '交易席位' },
+    { name: 'MXFJYM', len: 100, type: 'C', desc: '发生交易账号', user: true, placeholder: '交易账号' },
+    { name: 'MXFFZH', len: 25, type: 'C', desc: '发生资金账号', user: true, placeholder: '资金账号' },
+    { name: 'MXFZQM', len: 8, type: 'C', desc: '发生证券账号', user: true, placeholder: '证券账号' },
+    { name: 'MXZQDM', len: 8, type: 'C', desc: '证券代码', user: true, placeholder: '证券代码' },
+    { name: 'MXYWLB', len: 4, type: 'C', desc: '业务类别', user: true, placeholder: '业务类别' },
+    { name: 'MXZHZQ', len: 20, type: 'C', desc: '组合证券账号', user: true, placeholder: '组合账号' },
+    { name: 'MXSFJS', len: 6, type: 'C', desc: '收方结算账号', user: true, placeholder: '收方结算' },
+    { name: 'MXSFTG', len: 6, type: 'C', desc: '收方托管单元', user: true, placeholder: '收方托管' },
+    { name: 'MXSTGM', len: 20, type: 'C', desc: '收方托管账号', user: true, placeholder: '收方托管' },
+    { name: 'MXSFJY', len: 100, type: 'C', desc: '收方交易席位', user: true, placeholder: '收方席位' },
+    { name: 'MXSJYM', len: 100, type: 'C', desc: '收方交易账号', user: true, placeholder: '收方账号' },
+    { name: 'MXSFZH', len: 25, type: 'C', desc: '收方资金账号', user: true, placeholder: '收方资金' },
+    { name: 'MXSZQM', len: 8, type: 'C', desc: '收方证券账号', user: true, placeholder: '收方证券' },
+    { name: 'MXDDBH', len: 24, type: 'C', desc: '订单编号', user: true, placeholder: '订单编号' },
+    { name: 'MXZXBH', len: 16, type: 'C', desc: '执行编号', user: true, placeholder: '执行编号' },
+    { name: 'MXQTBH', len: 30, type: 'C', desc: '其他编号', user: true, placeholder: '其他编号' },
+    { name: 'MXSFJE', len: 17, type: 'N', desc: '收付金额', user: true, placeholder: '金额', dec: 2 },
+    { name: 'MXQTJE', len: 30, type: 'N', desc: '其他金额', user: true, placeholder: '其他金额', dec: 2 },
+    { name: 'MXFFFY', len: 17, type: 'N', desc: '应付费用', user: true, placeholder: '应付费用', dec: 2 },
+    { name: 'MXSFFY', len: 17, type: 'N', desc: '应收费用', user: true, placeholder: '应收费用', dec: 2 },
+    { name: 'MXJYRQ', len: 8, type: 'C', desc: '交易日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'MXQSRQ', len: 8, type: 'C', desc: '清算日期', auto: true, date: true },
+    { name: 'MXFSRQ', len: 8, type: 'C', desc: '发生日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'MXYWLS', len: 8, type: 'C', desc: '业务流水号', user: true, placeholder: '流水号' },
+    { name: 'MXJSZT', len: 1, type: 'C', desc: '结算状态', user: true, placeholder: '0' },
+    { name: 'MXBYZD1', len: 16, type: 'C', desc: '备用字段1', user: true, placeholder: '备用1' },
+    { name: 'MXBYZD2', len: 30, type: 'C', desc: '备用字段2', user: true, placeholder: '备用2' },
+    { name: 'MXBYZD3', len: 30, type: 'C', desc: '备用字段3', user: true, placeholder: '备用3' }
+];
+
+// ============================================================
+// 上海gh字段定义 (竞价过户) - 15字段
+// 文件命名: gh{席位号}.dbf
+// ============================================================
+const SH_GH_FIELDS = [
+    { name: 'GDDM', len: 10, type: 'C', desc: '股东代码', user: true, placeholder: '股东代码' },
+    { name: 'GDXM', len: 8, type: 'C', desc: '股东姓名', user: true, placeholder: '股东姓名' },
+    { name: 'BCRQ', len: 8, type: 'C', desc: '日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'CJBH', len: 8, type: 'N', desc: '成交编号', user: true, placeholder: '成交编号' },
+    { name: 'GSDM', len: 5, type: 'C', desc: '公司代码/席位号', user: true, placeholder: '席位号' },
+    { name: 'CJSL', len: 10, type: 'N', desc: '成交数量', user: true, placeholder: '数量' },
+    { name: 'BCYE', len: 10, type: 'N', desc: '本次余额', user: true, placeholder: '余额' },
+    { name: 'ZQDM', len: 6, type: 'C', desc: '证券代码', user: true, placeholder: '证券代码' },
+    { name: 'SBSJ', len: 6, type: 'C', desc: '申报时间', user: true, placeholder: 'HHMMSS' },
+    { name: 'CJSJ', len: 6, type: 'C', desc: '成交时间', user: true, placeholder: 'HHMMSS' },
+    { name: 'CJJG', len: 8, type: 'N', desc: '成交价格', user: true, placeholder: '价格', dec: 3 },
+    { name: 'CJJE', len: 12, type: 'N', desc: '成交金额', user: true, placeholder: '金额', dec: 2 },
+    { name: 'SQBH', len: 10, type: 'C', desc: '申请编号', user: true, placeholder: '申请编号' },
+    { name: 'BS', len: 1, type: 'C', desc: '买卖', user: true, placeholder: 'B/S' },
+    { name: 'MJBH', len: 5, type: 'C', desc: '操作员代码', user: true, placeholder: '操作员' }
+];
+
+// ============================================================
+// 上海bgh字段定义 (综合业务过户) - 14字段
+// 文件命名: bgh{席位号}.dbf
+// ============================================================
+const SH_BGH_FIELDS = [
+    { name: 'GDDM', len: 10, type: 'C', desc: '股东代码', user: true, placeholder: '股东代码' },
+    { name: 'GDXM', len: 8, type: 'C', desc: '股东姓名', user: true, placeholder: '股东姓名' },
+    { name: 'BCRQ', len: 8, type: 'C', desc: '日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'YWLX', len: 4, type: 'C', desc: '业务类型', user: true, placeholder: '业务类型' },
+    { name: 'ZQDM', len: 6, type: 'C', desc: '证券代码', user: true, placeholder: '证券代码' },
+    { name: 'CJSL', len: 12, type: 'N', desc: '成交数量', user: true, placeholder: '数量' },
+    { name: 'BCYE', len: 12, type: 'N', desc: '本次余额', user: true, placeholder: '余额' },
+    { name: 'GSDM', len: 5, type: 'C', desc: '席位号', user: true, placeholder: '席位号' },
+    { name: 'SQBH', len: 16, type: 'C', desc: '申请编号', user: true, placeholder: '申请编号' },
+    { name: 'CJBH', len: 16, type: 'C', desc: '成交编号', user: true, placeholder: '成交编号' },
+    { name: 'JYRQ', len: 8, type: 'C', desc: '交易日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'QSRQ', len: 8, type: 'C', desc: '清算日期', auto: true, date: true },
+    { name: 'JSRQ', len: 8, type: 'C', desc: '交收日期', auto: true, date: true },
+    { name: 'BZ', len: 20, type: 'C', desc: '备注', user: true, placeholder: '备注' }
+];
+
+// ============================================================
+// 上海CIL字段定义 (现金差额/替代款) - 11字段
+// 文件命名: CIL{基金代码}.dbf
+// ============================================================
+const SH_CIL_FIELDS = [
+    { name: 'JJDM', len: 6, type: 'C', desc: '基金代码', user: true, placeholder: '基金代码' },
+    { name: 'ZJLX', len: 2, type: 'C', desc: '资金类型', user: true, placeholder: '资金类型' },
+    { name: 'ZQZH', len: 10, type: 'C', desc: '证券账号', user: true, placeholder: '证券账号' },
+    { name: 'JYXW', len: 5, type: 'C', desc: '交易席位', user: true, placeholder: '席位号' },
+    { name: 'XWHY', len: 8, type: 'C', desc: '席位会员', user: true, placeholder: '会员编号' },
+    { name: 'TKJE', len: 17, type: 'C', desc: '退款金额', user: true, placeholder: '退款金额' },
+    { name: 'BKJE', len: 17, type: 'C', desc: '补款金额', user: true, placeholder: '补款金额' },
+    { name: 'JSRQ', len: 8, type: 'C', desc: '交收日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'JYRQ', len: 8, type: 'C', desc: '交易日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'ZQDM', len: 6, type: 'C', desc: '证券代码', user: true, placeholder: '证券代码' },
+    { name: 'SHCJBH', len: 20, type: 'C', desc: '申赎成交编号', user: true, placeholder: '成交编号' }
+];
+
+// ============================================================
+// 上海etftbk字段定义 (ETF退补款) - 14字段
+// 文件命名: etftbk{基金代码}.dbf
+// ============================================================
+const SH_ETFTBK_FIELDS = [
+    { name: 'QSBH', len: 6, type: 'C', desc: '清算编号', user: true, placeholder: '清算编号' },
+    { name: 'JJDM', len: 8, type: 'C', desc: '基金代码', user: true, placeholder: '基金代码' },
+    { name: 'SSDM', len: 8, type: 'C', desc: '市场代码', user: true, placeholder: '市场代码' },
+    { name: 'ZQZH', len: 20, type: 'C', desc: '证券账号', user: true, placeholder: '证券账号' },
+    { name: 'XWH', len: 6, type: 'C', desc: '交易单元', user: true, placeholder: '交易单元' },
+    { name: 'TBKJE', len: 20, type: 'C', desc: '退补款金额', user: true, placeholder: '退补款' },
+    { name: 'ZJLX', len: 3, type: 'C', desc: '资金类型', user: true, placeholder: '资金类型' },
+    { name: 'JYRQ', len: 8, type: 'C', desc: '交易日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'JSRQ', len: 8, type: 'C', desc: '交收日期', auto: true, date: true },
+    { name: 'CJBH', len: 20, type: 'C', desc: '成交编号', user: true, placeholder: '成交编号' },
+    { name: 'ZJZH', len: 25, type: 'C', desc: '资金账号', user: true, placeholder: '资金账号' },
+    { name: 'ZHZQDM', len: 8, type: 'C', desc: '组合证券代码', user: true, placeholder: '组合代码' },
+    { name: 'BZ', len: 40, type: 'C', desc: '备注', user: true, placeholder: '备注' },
+    { name: 'BY', len: 80, type: 'C', desc: '备用', user: true, placeholder: '备用' }
+];
+
+// ============================================================
+// 深圳SJSJG字段定义 (明细结果文件) - 45字段
+// 文件命名: SJSJG_{YWLB}_{日期}.dbf
+// ============================================================
+const SZ_SJSJG_FIELDS = [
+    { name: 'JGJSZH', len: 6, type: 'C', desc: '结算账号', user: true, placeholder: '结算账号' },
+    { name: 'JGBFZH', len: 25, type: 'C', desc: '备付金账户', user: true, placeholder: '备付金账号' },
+    { name: 'JGSJLX', len: 2, type: 'C', desc: '数据类型', default: '10', readonly: true },
+    { name: 'JGYWLB', len: 4, type: 'C', desc: '业务类别', user: true, placeholder: 'JY00/SGSF/SHSF' },
+    { name: 'JGZQDM', len: 8, type: 'C', desc: '证券代码', user: true, placeholder: 'ETF代码' },
+    { name: 'JGJYDY', len: 6, type: 'C', desc: '交易单元', user: true, placeholder: '交易单元' },
+    { name: 'JGTGDY', len: 6, type: 'C', desc: '托管单元', user: true, placeholder: '托管单元' },
+    { name: 'JGZQZH', len: 20, type: 'C', desc: '证券账户', user: true, placeholder: '证券账户' },
+    { name: 'JGDDBH', len: 24, type: 'C', desc: '客户订单编号', user: true, placeholder: '订单编号' },
+    { name: 'JGYYB', len: 4, type: 'C', desc: '营业部代码', user: true, placeholder: '营业部' },
+    { name: 'JGZXBH', len: 16, type: 'C', desc: '执行编号', user: true, placeholder: '执行编号' },
+    { name: 'JGYWLSH', len: 16, type: 'C', desc: '业务流水号', user: true, placeholder: '流水号' },
+    { name: 'JGCJSL', len: 15, type: 'N', desc: '成交数量', user: true, placeholder: '数量' },
+    { name: 'JGQSSL', len: 15, type: 'N', desc: '清算数量', user: true, placeholder: '数量' },
+    { name: 'JGJSSL', len: 15, type: 'N', desc: '交收数量', user: true, placeholder: '数量' },
+    { name: 'JGCJJG', len: 13, type: 'N', desc: '成交价格', user: true, placeholder: '价格' },
+    { name: 'JGQSJG', len: 18, type: 'N', desc: '清算价格', user: true, placeholder: '价格' },
+    { name: 'JGXYJY', len: 1, type: 'C', desc: '信用交易标识', user: true, placeholder: '0' },
+    { name: 'JGPCBS', len: 1, type: 'C', desc: '平仓标识', user: true, placeholder: '0' },
+    { name: 'JGZQLB', len: 2, type: 'C', desc: '证券类别', user: true, placeholder: '55/58' },
+    { name: 'JGZQLB2', len: 2, type: 'C', desc: '证券子类', user: true, placeholder: '子类' },
+    { name: 'JGGFXZ', len: 2, type: 'C', desc: '股份性质', user: true, placeholder: '性质' },
+    { name: 'JGLTLX', len: 1, type: 'C', desc: '流通类型', user: true, placeholder: '流通' },
+    { name: 'JGJSFS', len: 1, type: 'C', desc: '交收方式', user: true, placeholder: '1' },
+    { name: 'JGHBDH', len: 3, type: 'C', desc: '货币代号', default: 'RMB', readonly: true },
+    { name: 'JGQSBJ', len: 17, type: 'N', desc: '清算本金', user: true, placeholder: '金额' },
+    { name: 'JGYHS', len: 12, type: 'N', desc: '印花税', user: true, placeholder: '0' },
+    { name: 'JGJYJSF', len: 12, type: 'N', desc: '交易经手费', user: true, placeholder: '费用' },
+    { name: 'JGJGGF', len: 12, type: 'N', desc: '监管规费', user: true, placeholder: '费用' },
+    { name: 'JGGHF', len: 12, type: 'N', desc: '过户费', user: true, placeholder: '0' },
+    { name: 'JGJSF', len: 12, type: 'N', desc: '结算费', user: true, placeholder: '费用' },
+    { name: 'JGSXF', len: 12, type: 'N', desc: '手续费', user: true, placeholder: '费用' },
+    { name: 'JGQSYJ', len: 12, type: 'N', desc: '结算参与人佣金', user: true, placeholder: '佣金' },
+    { name: 'JGQTFY', len: 12, type: 'N', desc: '其它费用', user: true, placeholder: '0' },
+    { name: 'JGZJJE', len: 17, type: 'N', desc: '资金金额', user: true, placeholder: '0' },
+    { name: 'JGSFJE', len: 18, type: 'N', desc: '收付净额', user: true, placeholder: '净额' },
+    { name: 'JGJSBZ', len: 1, type: 'C', desc: '交收标志', user: true, placeholder: '0' },
+    { name: 'JGZYDH', len: 4, type: 'C', desc: '摘要代号', user: true, placeholder: '摘要' },
+    { name: 'JGCJRQ', len: 8, type: 'C', desc: '成交日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'JGQSRQ', len: 8, type: 'C', desc: '清算日期', auto: true, date: true },
+    { name: 'JGJSRQ', len: 8, type: 'C', desc: '交收日期', auto: true, date: true },
+    { name: 'JGFSRQ', len: 8, type: 'C', desc: '发送日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'JGQTRQ', len: 8, type: 'C', desc: '其它日期', user: true, date: true, placeholder: 'YYYYMMDD' },
+    { name: 'JGSCDM', len: 2, type: 'C', desc: '市场代码', default: '02', readonly: true },
+    { name: 'JGJYFS', len: 2, type: 'C', desc: '交易方式', user: true, placeholder: '交易方式' },
+    { name: 'JGFJSM', len: 100, type: 'C', desc: '附加说明', user: true, placeholder: '说明' },
+    { name: 'JGBYBZ', len: 1, type: 'C', desc: '备用标志', user: true, placeholder: '0' }
+];
+
+// ============================================================
+// 账户配置模板
+// ============================================================
+const ACCOUNT_CONFIG = {
+    SH: [
+        { key: 'XWH1', label: '席位号', placeholder: '5位席位号' },
+        { key: 'JSHY', label: '结算编号', placeholder: '8位结算编号' },
+        { key: 'ZQZH', label: '股东账号', placeholder: '10位账号' },
+        { key: 'ZJZH', label: '资金账号', placeholder: '25位账号' }
+    ],
+    SZ: [
+        { key: 'MXJSZH', label: '结算账号', placeholder: '6位账号' },
+        { key: 'MXBFZH', label: '备付金账户', placeholder: '25位账号' },
+        { key: 'MXJYDY', label: '交易单元', placeholder: '6位单元' },
+        { key: 'MXTGDY', label: '托管单元', placeholder: '6位单元' },
+        { key: 'MXZQZH', label: '证券账户', placeholder: '20位账户' }
+    ]
+};
+
+let globalAccounts = {};
+
+// ============================================================
+// 初始化
+// ============================================================
+function init() {
+    updateBizGrid();
+    updateDatePreview();
+    updateAccountConfig();
+    addRecord();
+}
+
+// ============================================================
+// 选择市场
+// ============================================================
+function selectMarket(market) {
+    currentMarket = market;
+    currentBizType = null;
+    document.querySelectorAll('.market-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.market === market);
+    });
+    updateBizGrid();
+    updateAccountConfig();
+    records = [];
+    addRecord();
+    updateStatusInfo();
+}
+
+// ============================================================
+// 更新业务类型网格（按分类折叠，支持搜索）
+// ============================================================
+function updateBizGrid() {
+    const grid = document.getElementById('bizGrid');
+    const config = currentMarket === 'SH' ? SH_BUSINESS_CONFIG : SZ_BUSINESS_CONFIG;
+    
+    // 搜索功能
+    const searchInput = document.getElementById('bizSearch');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    
+    // 按分类分组
+    const categories = {};
+    Object.entries(config).forEach(([key, biz]) => {
+        // 搜索过滤
+        if (searchTerm && !key.toLowerCase().includes(searchTerm) && 
+            !biz.name.toLowerCase().includes(searchTerm) &&
+            !biz.direction.toLowerCase().includes(searchTerm)) {
+            return;
+        }
+        const cat = biz.category || '其他';
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push({ key, biz });
+    });
+    
+    // 分类图标
+    const categoryIcons = { 
+        'ETF': '📊', 
+        'LOF': '📋', 
+        'REITS': '🏢', 
+        'SJSZJ': '💰',
+        'SJSJG': '📋',
+        'DSFMX': '💳',
+        'GH': '📝',
+        'BGH': '📋',
+        'CIL': '💹',
+        'ETFTBK': '💸',
+        '其他': '📄' 
+    };
+    
+    let html = '';
+    
+    // 如果有搜索词，显示搜索结果
+    if (searchTerm) {
+        let totalCount = 0;
+        Object.values(categories).forEach(items => totalCount += items.length);
+        html += `<div class="search-result-header">🔍 搜索"${searchTerm}"，找到 ${totalCount} 个</div>`;
+    }
+    
+    Object.entries(categories).forEach(([cat, items]) => {
+        if (items.length === 0) return;
+        const isCollapsed = searchTerm ? '' : 'collapsed';
+        
+        html += `
+            <div class="biz-category" data-category="${cat}">
+                <div class="biz-category-header ${isCollapsed}" onclick="toggleCategory('${cat}')">
+                    <span class="icon">${categoryIcons[cat] || '📄'}</span>
+                    <span class="name">${cat}</span>
+                    <span class="count">${items.length}</span>
+                    <span class="arrow">▼</span>
+                </div>
+                <div class="biz-category-items ${isCollapsed}" id="items-${cat}">
+                    ${items.map(({ key, biz }) => `
+                        <div class="biz-item ${currentBizType === key ? 'active' : ''}" 
+                             onclick="selectBizType('${key}')">
+                            <div class="icon">${biz.icon}</div>
+                            <div class="name">${biz.name}-${biz.direction}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    });
+    
+    if (Object.keys(categories).length === 0) {
+        html = '<div class="empty-msg">没有找到匹配的业务类型</div>';
+    }
+    
+    grid.innerHTML = html;
+}
+
+// ============================================================
+// 折叠/展开分类
+// ============================================================
+function toggleCategory(cat) {
+    const header = document.querySelector(`.biz-category[data-category="${cat}"] .biz-category-header`);
+    const items = document.getElementById(`items-${cat}`);
+    header.classList.toggle('collapsed');
+    items.classList.toggle('collapsed');
+}
+
+// ============================================================
+// 选择业务类型
+// ============================================================
+function selectBizType(bizType) {
+    currentBizType = bizType;
+    
+    // 更新选中状态
+    document.querySelectorAll('.biz-item').forEach(item => {
+        const name = item.querySelector('.name').textContent;
+        const [etfName, direction] = name.split('-');
+        const fullName = bizType;
+        item.classList.toggle('active', item.querySelector('.name').textContent === name && bizType.includes(etfName) && bizType.includes(direction));
+    });
+    
+    // 更新记录
+    if (records.length === 0) addRecord();
+    if (records[0] && !records[0].bizType) {
+        records[0].bizType = bizType;
+        updateRecordFields(records[0]);
+    }
+    
+    // 显示拆分预览
+    showSplitPreview(bizType);
+    
+    // 更新状态栏
+    updateStatusInfo();
+}
+
+// ============================================================
+// 显示拆分预览
+// ============================================================
+function showSplitPreview(bizType) {
+    const previewDiv = document.getElementById('splitPreview');
+    if (!previewDiv) return;
+    
+    const bizConfig = getBizConfig(bizType);
+    if (bizConfig && bizConfig.autoSplit && bizConfig.splitConfig) {
+        previewDiv.style.display = 'block';
+        previewDiv.innerHTML = `
+            <div style="font-size: 11px; color: var(--accent-yellow); margin-bottom: 8px;">📋 将自动拆分为以下${bizConfig.splitConfig.length}条记录：</div>
+            ${bizConfig.splitConfig.map((split, i) => `
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px; background: var(--bg-input); border-radius: 4px;">
+                    <span style="background: var(--accent-purple); color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 10px;">${i + 1}</span>
+                    <span style="color: var(--text-primary); font-size: 12px;">${split.label}</span>
+                    <span style="color: var(--text-secondary); font-size: 10px; margin-left: auto;">YWLX:${split.ywlx}</span>
+                </div>
+            `).join('')}
+        `;
+    } else {
+        previewDiv.style.display = 'none';
+    }
+}
+
+// ============================================================
+// 选择生成天数
+// ============================================================
+function selectDays(days) {
+    if (selectedDays.includes(days)) {
+        if (selectedDays.length > 1) selectedDays = selectedDays.filter(d => d !== days);
+    } else {
+        selectedDays.push(days);
+    }
+    selectedDays.sort((a, b) => a - b);
+    document.querySelectorAll('.day-tab').forEach(tab => {
+        tab.classList.toggle('active', selectedDays.includes(parseInt(tab.dataset.days)));
+    });
+    updateDatePreview();
+}
+
+// ============================================================
+// 更新日期预览
+// ============================================================
+function updateDatePreview() {
+    const startDate = document.getElementById('startDate').value;
+    const previewItems = document.getElementById('datePreviewItems');
+    if (!startDate || startDate.length !== 8) {
+        previewItems.innerHTML = '<div style="color: var(--accent-red); font-size: 11px;">请输入8位日期格式</div>';
+        return;
+    }
+    const baseDate = new Date(startDate.substring(0, 4) + '-' + startDate.substring(4, 6) + '-' + startDate.substring(6, 8));
+    previewItems.innerHTML = selectedDays.map(days => {
+        const targetDate = new Date(baseDate);
+        targetDate.setDate(targetDate.getDate() + (days - 1));
+        const dateStr = formatDate(targetDate);
+        const label = days === 1 ? 'T日' : 'T+' + (days-1) + '日';
+        return '<div class="date-preview-item"><span class="label">' + label + '</span><span class="value">' + dateStr + '</span></div>';
+    }).join('');
+}
+
+// ============================================================
+// 更新账户配置
+// ============================================================
+function updateAccountConfig() {
+    const config = ACCOUNT_CONFIG[currentMarket];
+    const container = document.getElementById('accountConfig');
+    container.innerHTML = config.map(item => `
+        <div class="account-item">
+            <label>${item.label}</label>
+            <input type="text" id="account_${item.key}" placeholder="${item.placeholder}" onchange="updateGlobalAccount('${item.key}', this.value)">
+        </div>
+    `).join('');
+}
+
+// ============================================================
+// 更新全局账户
+// ============================================================
+function updateGlobalAccount(key, value) {
+    globalAccounts[key] = value;
+}
+
+// ============================================================
+// 切换Tab
+// ============================================================
+function switchTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.includes(tabName === 'records' ? '清算记录' : '输出结果'));
+    });
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+        pane.classList.toggle('active', pane.id === 'tab-' + tabName);
+    });
+}
+
+// ============================================================
+// 添加清算记录
+// ============================================================
+function addRecord() {
+    const record = {
+        id: recordIdCounter++,
+        bizType: currentBizType,
+        fields: {},
+        dates: {}
+    };
+    records.push(record);
+    renderRecords();
+    updateRecordFields(record);
+    document.getElementById('tab-records').scrollTop = document.getElementById('tab-records').scrollHeight;
+}
+
+// ============================================================
+// 渲染记录列表
+// ============================================================
+function renderRecords() {
+    const container = document.getElementById('bizRecords');
+    container.innerHTML = records.map(record => {
+        const bizConfig = getBizConfig(record.bizType);
+        const fileType = bizConfig ? bizConfig.fileType : (currentMarket === 'SH' ? 'JSMX' : 'SJSMX');
+        const fileFields = getFieldConfig(fileType);
+        
+        // 业务信息标签
+        let ywxx = '';
+        if (bizConfig) {
+            ywxx = `${bizConfig.fileType}`;
+            if (bizConfig.ywlx) ywxx += ` | YWLX:${bizConfig.ywlx}`;
+            if (bizConfig.ywlb) ywxx += ` | YWLB:${bizConfig.ywlb}`;
+            if (bizConfig.zqlb) ywxx += ` | ZQLB:${bizConfig.zqlb}`;
+        }
+        
+        // 自动拆分提示
+        let splitHint = '';
+        if (bizConfig && bizConfig.autoSplit && bizConfig.splitConfig) {
+            const splitCount = bizConfig.splitConfig.length;
+            splitHint = `<span class="split-hint">📋 自动拆分为${splitCount}条: ${bizConfig.splitConfig.map(s => s.label).join(' / ')}</span>`;
+        }
+        
+        // 子类型标签
+        let subTypeLabel = '';
+        if (record.subType) {
+            subTypeLabel = `<span class="sub-type-badge">${record.subType}</span>`;
+        }
+        
+        return `
+            <div class="record-card" id="record_${record.id}">
+                <div class="record-header">
+                    <div class="record-title">
+                        <span class="badge">#${record.id}</span>
+                        <span class="biz-type">${bizConfig ? bizConfig.name + '-' + bizConfig.direction : '请选择业务类型'}</span>
+                        ${subTypeLabel}
+                        <span class="ywxx">${ywxx}</span>
+                    </div>
+                    ${splitHint}
+                    <div class="record-actions">
+                        <button class="sample-btn" onclick="fillSampleData(${record.id})">📝 示例</button>
+                        <button onclick="copyRecord(${record.id})">📋 复制</button>
+                        <button class="delete-btn" onclick="event.stopPropagation(); deleteRecord(${record.id})">🗑️ 删除</button>
+                    </div>
+                </div>
+                <div class="field-form" id="fields_${record.id}">
+                    ${renderFieldForm(record, fileFields)}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ============================================================
+// 获取业务配置
+// ============================================================
+function getBizConfig(bizType) {
+    if (!bizType) return null;
+    const config = currentMarket === 'SH' ? SH_BUSINESS_CONFIG : SZ_BUSINESS_CONFIG;
+    return config[bizType] || null;
+}
+
+// ============================================================
+// 获取字段配置
+// ============================================================
+function getFieldConfig(fileType) {
+    switch (fileType) {
+        case 'JSMX': return SH_JSMX_FIELDS;
+        case 'KF1': return SH_KF1_FIELDS;
+        case 'SJSMX': return SZ_SJSMX_FIELDS;
+        case 'SJSFX': return SZ_SJSFX_FIELDS;
+        case 'SJSZJ': return SZ_SJSZJ_FIELDS;
+        case 'SJSJG': return SZ_SJSJG_FIELDS;
+        case 'DSFMX': return SZ_DSFMX_FIELDS;
+        case 'GH': return SH_GH_FIELDS;
+        case 'BGH': return SH_BGH_FIELDS;
+        case 'CIL': return SH_CIL_FIELDS;
+        case 'ETFTBK': return SH_ETFTBK_FIELDS;
+        default: return currentMarket === 'SH' ? SH_JSMX_FIELDS : SZ_SJSMX_FIELDS;
+    }
+}
+
+// ============================================================
+// 渲染字段表单
+// ============================================================
+function renderFieldForm(record, fields) {
+    let html = '';
+    
+    // 日期字段
+    const dateFields = fields.filter(f => f.date);
+    if (dateFields.length > 0) {
+        html += '<div class="field-section"><div class="field-section-title">📅 日期信息</div><div class="field-grid field-grid-3">' + 
+            dateFields.map(f => renderFieldInput(record, f)).join('') + '</div></div>';
+    }
+    
+    // 账户字段
+    const accountFields = fields.filter(f => 
+        ['ZQZH', 'ZJZH', 'XWH1', 'JSHY', 'MXJSZH', 'MXBFZH', 'MXJYDY', 'MXTGDY', 'MXZQZH'].includes(f.name)
+    );
+    if (accountFields.length > 0) {
+        html += '<div class="field-section"><div class="field-section-title">💼 账户信息</div><div class="field-grid">' + 
+            accountFields.map(f => renderFieldInput(record, f)).join('') + '</div></div>';
+    }
+    
+    // 交易字段
+    const tradeFields = fields.filter(f => 
+        ['ZQDM1', 'ZQDM', 'MXZQDM', 'FXZQDM', 'CJSL', 'SL', 'MXCJSL', 'MXQSSL', 'FXCJSL',
+         'JG1', 'MXCJJG', 'MXQSJG', 'QSJE', 'MXQSBJ', 'FXQSJE', 'CJJE', 'ZQLB', 'MXZQLB', 'MMBZ'].includes(f.name)
+    );
+    if (tradeFields.length > 0) {
+        html += '<div class="field-section"><div class="field-section-title">📊 交易信息</div><div class="field-grid">' + 
+            tradeFields.map(f => renderFieldInput(record, f)).join('') + '</div></div>';
+    }
+    
+    // 费用字段
+    const feeFields = fields.filter(f => 
+        ['YHS', 'JSF', 'GHF', 'ZGF', 'SXF', 'MXJYJSF', 'MXJGGF', 'MXJSF', 'MXSXF', 'FXJSF', 'FXJGGF', 'FXSXF'].includes(f.name)
+    );
+    if (feeFields.length > 0) {
+        html += '<div class="field-section"><div class="field-section-title">💰 清算费用</div><div class="field-grid field-grid-3">' + 
+            feeFields.map(f => renderFieldInput(record, f)).join('') + '</div></div>';
+    }
+    
+    // 收付字段
+    const amountFields = fields.filter(f => 
+        ['SJSF', 'MXSFJE', 'FXSFJE', 'MXZJJE'].includes(f.name)
+    );
+    if (amountFields.length > 0) {
+        html += '<div class="field-section"><div class="field-section-title">💵 收付金额</div><div class="field-grid">' + 
+            amountFields.map(f => renderFieldInput(record, f)).join('') + '</div>';
+        if (currentMarket === 'SH') {
+            html += '<div class="formula-hint">📐 上海: SJSF = QSJE + YHS + JSF + GHF + ZGF + SXF + QTJE1~3</div>';
+        } else {
+            html += '<div class="formula-hint">📐 深圳: MXSFJE = MXQSBJ + MXYHS + MXJYJSF + MXJGGF + MXGHF + MXJSF + MXSXF + MXQTFY + MXZJJE</div>';
+        }
+        html += '</div>';
+    }
+    
+    // 业务标识字段
+    const flagFields = fields.filter(f => 
+        ['YWLX', 'QSBZ', 'GHLX', 'MXYWLB', 'MXJSFS', 'FXYWLB'].includes(f.name)
+    );
+    if (flagFields.length > 0) {
+        html += '<div class="field-section"><div class="field-section-title">🏷️ 业务标识</div><div class="field-grid field-grid-3">' + 
+            flagFields.map(f => renderFieldInput(record, f)).join('') + '</div></div>';
+    }
+    
+    return html;
+}
+
+// ============================================================
+// 渲染字段输入框
+// ============================================================
+function renderFieldInput(record, field) {
+    const value = record.fields[field.name] || field.default || '';
+    let inputClass = 'field-input';
+    if (field.readonly) inputClass += ' readonly';
+    else if (field.auto) inputClass += ' auto';
+    else if (field.user) inputClass += ' user';
+    const readOnlyAttr = field.readonly || field.auto ? 'readonly' : '';
+    const onChange = (field.readonly || field.auto) ? '' : 'onchange="updateField(' + record.id + ', \'' + field.name + '\', this.value)"';
+    const onInput = field.auto ? 'oninput="calcActualAmount(' + record.id + ')"' : '';
+    
+    // 生成友好的placeholder
+    let placeholder = '';
+    if (field.placeholder) {
+        placeholder = field.placeholder;
+    } else if (field.example) {
+        placeholder = field.example;
+    } else if (value && value.trim()) {
+        placeholder = value;
+    } else {
+        placeholder = '-';
+    }
+    
+    return '<div class="field-item">' +
+           '<span class="field-label">' + field.desc + '</span>' +
+           '<input type="text" class="' + inputClass + '" data-record="' + record.id + '" data-field="' + field.name + '" value="' + value + '" ' + readOnlyAttr + ' ' + onChange + ' ' + onInput + ' placeholder="' + placeholder + '">' +
+           '<span class="field-length">' + field.len + field.type + '</span>' +
+           '</div>';
+}
+
+// ============================================================
+// 更新记录字段
+// ============================================================
+function updateRecordFields(record) {
+    const bizConfig = getBizConfig(record.bizType);
+    if (!bizConfig) return;
+    
+    // 设置业务标识
+    if (bizConfig.ywlx) record.fields['YWLX'] = bizConfig.ywlx;
+    if (bizConfig.ywlb) {
+        if (bizConfig.fileType === 'SJSFX') record.fields['FXYWLB'] = bizConfig.ywlb;
+        else record.fields['MXYWLB'] = bizConfig.ywlb;
+    }
+    if (bizConfig.qsbz) record.fields['QSBZ'] = bizConfig.qsbz;
+    if (bizConfig.zqlb) record.fields['ZQLB'] = bizConfig.zqlb;
+    if (bizConfig.zqlb) record.fields['MXZQLB'] = bizConfig.zqlb;
+    
+    // 设置买卖标志和成交数量正负
+    // 深圳ETF买卖共用YWLB=JY00，通过成交数量正负区分买卖方向
+    if (currentMarket === 'SH') {
+        if (bizConfig.direction === '买入') record.fields['MMBZ'] = 'B';
+        else if (bizConfig.direction === '卖出') record.fields['MMBZ'] = 'S';
+    } else {
+        // 深圳ETF买卖：JY00通过成交数量正负区分
+        if (bizConfig.ywlb === 'JY00') {
+            if (bizConfig.direction === '买入') {
+                // 成交数量>0，买入金额>0
+            } else if (bizConfig.direction === '卖出') {
+                // 成交数量<0，买入金额<0 (清算本金为负)
+            }
+        }
+    }
+    
+    // 设置市场默认值
+    if (currentMarket === 'SH') {
+        record.fields['SCDM'] = '01';
+        record.fields['JYFS'] = bizConfig.jyfs || '001';
+        record.fields['JSFS'] = '001';
+        record.fields['BZ'] = 'RMB';
+        // 根据业务类型设置JLLX和GHLX
+        if (bizConfig.jllx) {
+            record.fields['JLLX'] = bizConfig.jllx;
+        } else {
+            record.fields['JLLX'] = '001';
+        }
+        if (bizConfig.ghlx) {
+            record.fields['GHLX'] = bizConfig.ghlx;
+        }
+    } else {
+        record.fields['MXSJLX'] = bizConfig.fileType === 'SJSFX' ? '20' : '10';
+        record.fields['MXHBDH'] = 'RMB';
+        record.fields['FXSJLX'] = '20';
+        record.fields['MXJSFS'] = '1';
+    }
+    
+    // 设置日期
+    const startDate = document.getElementById('startDate').value;
+    if (currentMarket === 'SH') {
+        record.fields['JYRQ'] = startDate;
+        record.fields['QSRQ'] = startDate;
+        record.fields['JSRQ'] = addDays(startDate, 1);
+    } else {
+        record.fields['FXCJRQ'] = startDate;
+        record.fields['FXQSRQ'] = startDate;
+        record.fields['FXJSRQ'] = addDays(startDate, 1);
+    }
+    
+    // 应用全局账户
+    Object.keys(globalAccounts).forEach(key => {
+        record.fields[key] = globalAccounts[key];
+    });
+    
+    renderRecords();
+}
+
+// ============================================================
+// 更新字段值
+// ============================================================
+function updateField(recordId, fieldName, value) {
+    const record = records.find(r => r.id === recordId);
+    if (!record) return;
+    record.fields[fieldName] = value;
+    
+    // 日期联动
+    if (fieldName === 'JYRQ' || fieldName === 'FXCJRQ') {
+        if (currentMarket === 'SH') {
+            record.fields['QSRQ'] = value;
+            record.fields['JSRQ'] = addDays(value, 1);
+        } else {
+            record.fields['FXQSRQ'] = value;
+            record.fields['FXJSRQ'] = addDays(value, 1);
+        }
+        renderRecords();
+    }
+    
+    calcActualAmount(recordId);
+}
+
+// ============================================================
+// 计算实际收付
+// ============================================================
+function calcActualAmount(recordId) {
+    const record = records.find(r => r.id === recordId);
+    if (!record) return;
+    
+    if (currentMarket === 'SH') {
+        const qsje = parseFloat(record.fields['QSJE'] || 0);
+        const yhs = parseFloat(record.fields['YHS'] || 0);
+        const jsf = parseFloat(record.fields['JSF'] || 0);
+        const ghf = parseFloat(record.fields['GHF'] || 0);
+        const zgf = parseFloat(record.fields['ZGF'] || 0);
+        const sxf = parseFloat(record.fields['SXF'] || 0);
+        const qtje1 = parseFloat(record.fields['QTJE1'] || 0);
+        const qtje2 = parseFloat(record.fields['QTJE2'] || 0);
+        const qtje3 = parseFloat(record.fields['QTJE3'] || 0);
+        const sjsf = qsje + yhs + jsf + ghf + zgf + sxf + qtje1 + qtje2 + qtje3;
+        record.fields['SJSF'] = formatAmount(sjsf, 19);
+        updateFieldDisplay(recordId, 'SJSF', record.fields['SJSF']);
+    } else {
+        const qsbj = parseFloat(record.fields['MXQSBJ'] || 0);
+        const yhs = parseFloat(record.fields['MXYHS'] || 0);
+        const jyjsf = parseFloat(record.fields['MXJYJSF'] || 0);
+        const jggf = parseFloat(record.fields['MXJGGF'] || 0);
+        const ghf = parseFloat(record.fields['MXGHF'] || 0);
+        const jsff = parseFloat(record.fields['MXJSF'] || 0);
+        const sxf = parseFloat(record.fields['MXSXF'] || 0);
+        const qtffy = parseFloat(record.fields['MXQTFY'] || 0);
+        const zjje = parseFloat(record.fields['MXZJJE'] || 0);
+        const sfje = qsbj + yhs + jyjsf + jggf + ghf + jsff + sxf + qtffy + zjje;
+        record.fields['MXSFJE'] = formatAmount(sfje, 17);
+        updateFieldDisplay(recordId, 'MXSFJE', record.fields['MXSFJE']);
+    }
+}
+
+function updateFieldDisplay(recordId, fieldName, value) {
+    const input = document.querySelector('[data-record="' + recordId + '"][data-field="' + fieldName + '"]');
+    if (input) input.value = value;
+}
+
+// ============================================================
+// 复制记录
+// ============================================================
+function copyRecord(recordId) {
+    const original = records.find(r => r.id === recordId);
+    if (!original) return;
+    const newRecord = {
+        id: recordIdCounter++,
+        bizType: original.bizType,
+        fields: { ...original.fields },
+        dates: { ...original.dates }
+    };
+    records.push(newRecord);
+    renderRecords();
+    updateRecordCount();
+}
+
+// ============================================================
+// 删除记录
+// ============================================================
+function deleteRecord(recordId) {
+    records = records.filter(r => r.id !== recordId);
+    renderRecords();
+    updateRecordCount();
+    if (records.length === 0) addRecord();
+}
+
+// ============================================================
+// 清空所有
+// ============================================================
+function clearAll() {
+    if (confirm('确定要清空所有记录吗？')) {
+        records = [];
+        generatedFiles = [];
+        recordIdCounter = 1;
+        addRecord();
+        updateRecordCount();
+        document.getElementById('outputFiles').innerHTML = '<div class="empty-msg">暂无生成文件</div>';
+    }
+}
+
+// ============================================================
+// 生成清算文件
+// ============================================================
+function generateAll() {
+    if (records.length === 0 || records.every(r => !r.bizType)) {
+        alert('请先选择业务类型并填写记录');
+        return;
+    }
+    
+    const startDate = document.getElementById('startDate').value;
+    if (!startDate || startDate.length !== 8) {
+        alert('请输入正确的起始日期（YYYYMMDD格式）');
+        return;
+    }
+    
+    generatedFiles = [];
+    
+    // 按日期分组收集数据
+    const dateGroups = {};
+    
+    selectedDays.forEach(dayOffset => {
+        const targetDate = addDays(startDate, dayOffset - 1);
+        const dateLabel = dayOffset === 1 ? 'T日' : 'T+' + (dayOffset-1) + '日';
+        
+        // 初始化当天的分组
+        if (!dateGroups[targetDate]) {
+            dateGroups[targetDate] = {
+                dateLabel: dateLabel,
+                shJsmx: [],  // 上海JSMX记录
+                szJsmx: {},   // 深圳SJSMX按业务类别分组
+                shKf1: [],    // 上海KF1记录
+                szSjsfx: [],  // 深圳SJSFX记录
+                szSjszj: {},  // 深圳SJSZJ按业务类别分组
+                szSjsjg: {},  // 深圳SJSJG按业务类别分组
+                szDsfmx: [],  // 深圳DSFMX记录
+                shGh: {},     // 上海gh按席位号分组
+                shBgh: {},    // 上海bgh按席位号分组
+                shCil: {},    // 上海CIL按基金代码分组
+                shEtftbk: {}  // 上海etftbk按基金代码分组
+            };
+        }
+        
+        records.forEach(record => {
+            if (!record.bizType) return;
+            
+            const bizConfig = getBizConfig(record.bizType);
+            if (!bizConfig) return;
+            
+            // 检查是否需要自动拆分
+            if (bizConfig.autoSplit && bizConfig.splitConfig && bizConfig.splitConfig.length > 0) {
+                // 自动拆分为多条记录
+                bizConfig.splitConfig.forEach((split, index) => {
+                    const splitRecord = JSON.parse(JSON.stringify(record));
+                    splitRecord.id = recordIdCounter++;
+                    splitRecord.subType = split.subType;
+                    splitRecord.splitInfo = split;
+                    splitRecord.fields = { ...record.fields };
+                    
+                    // 应用拆分配置
+                    if (split.ywlx) splitRecord.fields['YWLX'] = split.ywlx;
+                    if (split.jllx) splitRecord.fields['JLLX'] = split.jllx;
+                    if (split.qsbz) splitRecord.fields['QSBZ'] = split.qsbz;
+                    if (split.ghlx) splitRecord.fields['GHLX'] = split.ghlx;
+                    if (split.jyfs) splitRecord.fields['JYFS'] = split.jyfs;
+                    
+                    if (currentMarket === 'SH') {
+                        // 上海JSMX记录收集
+                        dateGroups[targetDate].shJsmx.push({
+                            record: splitRecord,
+                            bizConfig: bizConfig,
+                            split: split
+                        });
+                    } else {
+                        // 深圳SJSMX按业务类别分组
+                        const ywlb = splitRecord.fields['MXYWLB'] || bizConfig.ywlb;
+                        if (!dateGroups[targetDate].szJsmx[ywlb]) {
+                            dateGroups[targetDate].szJsmx[ywlb] = [];
+                        }
+                        dateGroups[targetDate].szJsmx[ywlb].push({
+                            record: splitRecord,
+                            bizConfig: bizConfig,
+                            split: split
+                        });
+                    }
+                });
+            } else {
+                // 不需要拆分的记录
+                if (currentMarket === 'SH') {
+                    if (bizConfig.fileType === 'KF1') {
+                        dateGroups[targetDate].shKf1.push({
+                            record: record,
+                            bizConfig: bizConfig
+                        });
+                    } else if (bizConfig.fileType === 'GH') {
+                        // 上海gh竞价过户
+                        const gsdm = record.fields['GSDM'] || globalAccounts['XWH1'] || '00000';
+                        if (!dateGroups[targetDate].shGh[gsdm]) {
+                            dateGroups[targetDate].shGh[gsdm] = [];
+                        }
+                        dateGroups[targetDate].shGh[gsdm].push({
+                            record: record,
+                            bizConfig: bizConfig
+                        });
+                    } else if (bizConfig.fileType === 'BGH') {
+                        // 上海bgh综合业务过户
+                        const gsdm = record.fields['GSDM'] || globalAccounts['XWH1'] || '00000';
+                        if (!dateGroups[targetDate].shBgh[gsdm]) {
+                            dateGroups[targetDate].shBgh[gsdm] = [];
+                        }
+                        dateGroups[targetDate].shBgh[gsdm].push({
+                            record: record,
+                            bizConfig: bizConfig
+                        });
+                    } else if (bizConfig.fileType === 'CIL') {
+                        // 上海CIL现金差额
+                        const jjdm = record.fields['JJDM'] || '000000';
+                        if (!dateGroups[targetDate].shCil[jjdm]) {
+                            dateGroups[targetDate].shCil[jjdm] = [];
+                        }
+                        dateGroups[targetDate].shCil[jjdm].push({
+                            record: record,
+                            bizConfig: bizConfig
+                        });
+                    } else if (bizConfig.fileType === 'ETFTBK') {
+                        // 上海etftbk ETF退补款
+                        const jjdm = record.fields['JJDM'] || '00000000';
+                        if (!dateGroups[targetDate].shEtftbk[jjdm]) {
+                            dateGroups[targetDate].shEtftbk[jjdm] = [];
+                        }
+                        dateGroups[targetDate].shEtftbk[jjdm].push({
+                            record: record,
+                            bizConfig: bizConfig
+                        });
+                    } else {
+                        dateGroups[targetDate].shJsmx.push({
+                            record: record,
+                            bizConfig: bizConfig,
+                            split: null
+                        });
+                    }
+                } else {
+                    if (bizConfig.fileType === 'SJSFX') {
+                        dateGroups[targetDate].szSjsfx.push({
+                            record: record,
+                            bizConfig: bizConfig
+                        });
+                    } else if (bizConfig.fileType === 'SJSZJ') {
+                        // 深圳SJSZJ资金变动
+                        const ywlb = record.fields['ZJYWLB'] || bizConfig.ywlb || 'ZJMM';
+                        if (!dateGroups[targetDate].szSjszj[ywlb]) {
+                            dateGroups[targetDate].szSjszj[ywlb] = [];
+                        }
+                        dateGroups[targetDate].szSjszj[ywlb].push({
+                            record: record,
+                            bizConfig: bizConfig
+                        });
+                    } else if (bizConfig.fileType === 'SJSJG') {
+                        // 深圳SJSJG明细结果
+                        const ywlb = record.fields['JGYWLB'] || bizConfig.ywlb || 'JY00';
+                        if (!dateGroups[targetDate].szSjsjg[ywlb]) {
+                            dateGroups[targetDate].szSjsjg[ywlb] = [];
+                        }
+                        dateGroups[targetDate].szSjsjg[ywlb].push({
+                            record: record,
+                            bizConfig: bizConfig
+                        });
+                    } else if (bizConfig.fileType === 'DSFMX') {
+                        // 深圳DSFMX实时代收代付
+                        dateGroups[targetDate].szDsfmx.push({
+                            record: record,
+                            bizConfig: bizConfig
+                        });
+                    } else {
+                        const ywlb = record.fields['MXYWLB'] || bizConfig.ywlb;
+                        if (!dateGroups[targetDate].szJsmx[ywlb]) {
+                            dateGroups[targetDate].szJsmx[ywlb] = [];
+                        }
+                        dateGroups[targetDate].szJsmx[ywlb].push({
+                            record: record,
+                            bizConfig: bizConfig,
+                            split: null
+                        });
+                    }
+                }
+            }
+        });
+    });
+    
+    // 生成文件
+    Object.entries(dateGroups).forEach(([targetDate, group]) => {
+        // 生成上海JSMX（合并到单个DBF文件）
+        if (group.shJsmx.length > 0) {
+            // 使用DBFWriter生成真正的dBase III文件
+            const dbfFields = SH_JSMX_FIELDS.map(f => ({
+                name: f.name,
+                type: f.type === 'N' ? 'N' : 'C',
+                len: f.len,
+                dec: f.dec || 0
+            }));
+            const writer = new DBFWriter(dbfFields);
+            
+            group.shJsmx.forEach(item => {
+                const record = item.record;
+                const values = SH_JSMX_FIELDS.map(f => {
+                    let val = record.fields[f.name] || f.default || '';
+                    if (f.date) {
+                        if (f.name === 'JSRQ') val = addDays(targetDate, 1);
+                        else val = targetDate;
+                    }
+                    if (f.type === 'N') {
+                        val = parseFloat(val) || 0;
+                    }
+                    return val;
+                });
+                writer.addRecord(values);
+            });
+            
+            generatedFiles.push({
+                name: 'jsmx01_' + targetDate + '.dbf',
+                content: writer.generate(),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'JSMX',
+                ywxx: '上海JSMX(' + group.shJsmx.length + '条记录)',
+                subType: 'DBF'
+            });
+        }
+        
+        // 生成上海KF1（每条单独文件）
+        group.shKf1.forEach(item => {
+            const qsbh = item.record.fields['QSBH'] || '00000';
+            generatedFiles.push({
+                name: 'kf1' + qsbh.substring(0, 5) + '.dbf',
+                content: generateSHKF1(item.record, targetDate),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'KF1',
+                ywxx: item.bizConfig.name + '-' + item.bizConfig.direction
+            });
+        });
+        
+        // 生成深圳SJSMX（每个业务类别一个文件）
+        Object.entries(group.szJsmx).forEach(([ywlb, items]) => {
+            let allContent = '';
+            items.forEach(item => {
+                allContent += generateSZSJSMX(item.record, targetDate);
+            });
+            generatedFiles.push({
+                name: 'SJSMX_' + ywlb + '_' + targetDate + '.dbf',
+                content: allContent,
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'SJSMX',
+                ywxx: '深圳SJSMX(' + ywlb + ',' + items.length + '条记录)',
+                subType: '合并'
+            });
+        });
+        
+        // 生成深圳SJSFX（每条单独文件）
+        group.szSjsfx.forEach(item => {
+            generatedFiles.push({
+                name: 'SJSFX_' + item.bizConfig.ywlb + '_' + targetDate + '.dbf',
+                content: generateSZSJSFX(item.record, targetDate),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'SJSFX',
+                ywxx: item.bizConfig.name + '-' + item.bizConfig.direction
+            });
+        });
+        
+        // 生成深圳SJSZJ（每个业务类别一个DBF文件）
+        Object.entries(group.szSjszj).forEach(([ywlb, items]) => {
+            const dbfFields = SZ_SJSZJ_FIELDS.map(f => ({
+                name: f.name,
+                type: f.type === 'N' ? 'N' : 'C',
+                len: f.len,
+                dec: f.dec || 0
+            }));
+            const writer = new DBFWriter(dbfFields);
+            
+            items.forEach(item => {
+                const record = item.record;
+                const values = SZ_SJSZJ_FIELDS.map(f => {
+                    let val = record.fields[f.name] || f.default || '';
+                    if (f.date) {
+                        if (f.name === 'ZJJZRQ') val = targetDate;
+                    }
+                    if (f.type === 'N') {
+                        val = parseFloat(val) || 0;
+                    }
+                    return val;
+                });
+                writer.addRecord(values);
+            });
+            
+            generatedFiles.push({
+                name: 'SJSZJ_' + ywlb + '_' + targetDate + '.dbf',
+                content: writer.generate(),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'SJSZJ',
+                ywxx: '深圳资金变动(' + ywlb + ',' + items.length + '条记录)',
+                subType: 'DBF'
+            });
+        });
+        
+        // 生成深圳SJSJG（每个业务类别一个DBF文件）
+        Object.entries(group.szSjsjg).forEach(([ywlb, items]) => {
+            const dbfFields = SZ_SJSJG_FIELDS.map(f => ({
+                name: f.name,
+                type: f.type === 'N' ? 'N' : 'C',
+                len: f.len,
+                dec: f.dec || 0
+            }));
+            const writer = new DBFWriter(dbfFields);
+            
+            items.forEach(item => {
+                const record = item.record;
+                const values = SZ_SJSJG_FIELDS.map(f => {
+                    let val = record.fields[f.name] || f.default || '';
+                    if (f.date) {
+                        if (f.name === 'JGCJRQ') val = targetDate;
+                        else if (f.name === 'JGQSRQ') val = targetDate;
+                        else if (f.name === 'JGJSRQ') val = addDays(targetDate, 1);
+                        else if (f.name === 'JGFSRQ') val = targetDate;
+                        else if (f.name === 'JGQTRQ') val = targetDate;
+                    }
+                    if (f.type === 'N') {
+                        val = parseFloat(val) || 0;
+                    }
+                    return val;
+                });
+                writer.addRecord(values);
+            });
+            
+            generatedFiles.push({
+                name: 'SJSJG_' + ywlb + '_' + targetDate + '.dbf',
+                content: writer.generate(),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'SJSJG',
+                ywxx: '深圳明细结果(' + ywlb + ',' + items.length + '条记录)',
+                subType: 'DBF'
+            });
+        });
+        
+        // 生成深圳DSFMX（单个DBF文件）
+        if (group.szDsfmx.length > 0) {
+            const dbfFields = SZ_DSFMX_FIELDS.map(f => ({
+                name: f.name,
+                type: f.type === 'N' ? 'N' : 'C',
+                len: f.len,
+                dec: f.dec || 0
+            }));
+            const writer = new DBFWriter(dbfFields);
+            
+            group.szDsfmx.forEach((item, index) => {
+                const record = item.record;
+                const values = SZ_DSFMX_FIELDS.map(f => {
+                    let val = record.fields[f.name] || f.default || '';
+                    if (f.date) {
+                        if (f.name === 'MXQSRQ') val = targetDate;
+                        else if (f.name === 'MXJYRQ') val = targetDate;
+                        else if (f.name === 'MXFSRQ') val = targetDate;
+                    }
+                    if (f.name === 'MXSXH') val = (index + 1).toString();
+                    if (f.type === 'N') {
+                        val = parseFloat(val) || 0;
+                    }
+                    return val;
+                });
+                writer.addRecord(values);
+            });
+            
+            generatedFiles.push({
+                name: 'DSFMX_' + targetDate + '.dbf',
+                content: writer.generate(),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'DSFMX',
+                ywxx: '深圳实收代付明细(' + group.szDsfmx.length + '条记录)',
+                subType: 'DBF'
+            });
+        }
+        
+        // 生成上海gh竞价过户（每个席位号一个DBF文件）
+        Object.entries(group.shGh).forEach(([gsdm, items]) => {
+            const dbfFields = SH_GH_FIELDS.map(f => ({
+                name: f.name,
+                type: f.type === 'N' ? 'N' : 'C',
+                len: f.len,
+                dec: f.dec || 0
+            }));
+            const writer = new DBFWriter(dbfFields);
+            
+            items.forEach(item => {
+                const record = item.record;
+                const values = SH_GH_FIELDS.map(f => {
+                    let val = record.fields[f.name] || f.default || '';
+                    if (f.date) {
+                        if (f.name === 'BCRQ') val = targetDate;
+                    }
+                    if (f.type === 'N') {
+                        val = parseFloat(val) || 0;
+                    }
+                    return val;
+                });
+                writer.addRecord(values);
+            });
+            
+            generatedFiles.push({
+                name: 'gh' + gsdm + '.dbf',
+                content: writer.generate(),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'GH',
+                ywxx: '上海竞价过户(' + gsdm + ',' + items.length + '条记录)',
+                subType: 'DBF'
+            });
+        });
+        
+        // 生成上海bgh综合业务过户（每个席位号一个DBF文件）
+        Object.entries(group.shBgh).forEach(([gsdm, items]) => {
+            const dbfFields = SH_BGH_FIELDS.map(f => ({
+                name: f.name,
+                type: f.type === 'N' ? 'N' : 'C',
+                len: f.len,
+                dec: f.dec || 0
+            }));
+            const writer = new DBFWriter(dbfFields);
+            
+            items.forEach(item => {
+                const record = item.record;
+                const values = SH_BGH_FIELDS.map(f => {
+                    let val = record.fields[f.name] || f.default || '';
+                    if (f.date) {
+                        if (f.name === 'BCRQ') val = targetDate;
+                        else if (f.name === 'JYRQ') val = targetDate;
+                        else if (f.name === 'QSRQ') val = targetDate;
+                        else if (f.name === 'JSRQ') val = addDays(targetDate, 1);
+                    }
+                    if (f.type === 'N') {
+                        val = parseFloat(val) || 0;
+                    }
+                    return val;
+                });
+                writer.addRecord(values);
+            });
+            
+            generatedFiles.push({
+                name: 'bgh' + gsdm + '.dbf',
+                content: writer.generate(),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'BGH',
+                ywxx: '上海综合业务过户(' + gsdm + ',' + items.length + '条记录)',
+                subType: 'DBF'
+            });
+        });
+        
+        // 生成上海CIL现金差额（每个基金代码一个DBF文件）
+        Object.entries(group.shCil).forEach(([jjdm, items]) => {
+            const dbfFields = SH_CIL_FIELDS.map(f => ({
+                name: f.name,
+                type: f.type === 'N' ? 'N' : 'C',
+                len: f.len,
+                dec: f.dec || 0
+            }));
+            const writer = new DBFWriter(dbfFields);
+            
+            items.forEach(item => {
+                const record = item.record;
+                const values = SH_CIL_FIELDS.map(f => {
+                    let val = record.fields[f.name] || f.default || '';
+                    if (f.date) {
+                        if (f.name === 'JSRQ') val = addDays(targetDate, 1);
+                        else if (f.name === 'JYRQ') val = targetDate;
+                    }
+                    if (f.type === 'N') {
+                        val = parseFloat(val) || 0;
+                    }
+                    return val;
+                });
+                writer.addRecord(values);
+            });
+            
+            generatedFiles.push({
+                name: 'CIL' + jjdm + '.dbf',
+                content: writer.generate(),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'CIL',
+                ywxx: '上海现金差额(' + jjdm + ',' + items.length + '条记录)',
+                subType: 'DBF'
+            });
+        });
+        
+        // 生成上海etftbk ETF退补款（每个基金代码一个DBF文件）
+        Object.entries(group.shEtftbk).forEach(([jjdm, items]) => {
+            const dbfFields = SH_ETFTBK_FIELDS.map(f => ({
+                name: f.name,
+                type: f.type === 'N' ? 'N' : 'C',
+                len: f.len,
+                dec: f.dec || 0
+            }));
+            const writer = new DBFWriter(dbfFields);
+            
+            items.forEach(item => {
+                const record = item.record;
+                const values = SH_ETFTBK_FIELDS.map(f => {
+                    let val = record.fields[f.name] || f.default || '';
+                    if (f.date) {
+                        if (f.name === 'JYRQ') val = targetDate;
+                        else if (f.name === 'JSRQ') val = addDays(targetDate, 1);
+                    }
+                    if (f.type === 'N') {
+                        val = parseFloat(val) || 0;
+                    }
+                    return val;
+                });
+                writer.addRecord(values);
+            });
+            
+            generatedFiles.push({
+                name: 'etftbk' + jjdm + '.dbf',
+                content: writer.generate(),
+                dateLabel: group.dateLabel,
+                market: currentMarket,
+                type: 'ETFTBK',
+                ywxx: '上海ETF退补款(' + jjdm + ',' + items.length + '条记录)',
+                subType: 'DBF'
+            });
+        });
+    });
+    
+    renderOutputFiles();
+    switchTab('output');
+    updateStatusInfo();
+    alert('✅ 生成完成！共 ' + generatedFiles.length + ' 个文件');
+}
+
+// ============================================================
+// 生成上海JSMX
+// ============================================================
+function generateSHJSMX(record, date) {
+    const fields = SH_JSMX_FIELDS;
+    let line = '';
+    fields.forEach(field => {
+        let value = record.fields[field.name] || field.default || '';
+        if (field.date) {
+            if (field.name === 'JSRQ') value = addDays(date, 1);
+            else value = date;
+        }
+        if (field.type === 'N') {
+            value = formatAmount(parseFloat(value) || 0, field.len);
+        } else if (value === '' || value === undefined) {
+            value = ' '.repeat(field.len);
+        } else {
+            value = String(value).padEnd(field.len).substring(0, field.len);
+        }
+        line += value;
+    });
+    return line + '\n';
+}
+
+// ============================================================
+// 生成上海KF1
+// ============================================================
+function generateSHKF1(record, date) {
+    const fields = SH_KF1_FIELDS;
+    let line = '';
+    fields.forEach(field => {
+        let value = record.fields[field.name] || field.default || '';
+        if (field.date) {
+            if (field.name === 'JSRQ') value = addDays(date, 1);
+            else value = date;
+        }
+        if (field.type === 'N') {
+            value = formatAmount(parseFloat(value) || 0, field.len);
+        } else if (value === '' || value === undefined) {
+            value = ' '.repeat(field.len);
+        } else {
+            value = String(value).padEnd(field.len).substring(0, field.len);
+        }
+        line += value;
+    });
+    return line + '\n';
+}
+
+// ============================================================
+// 生成深圳SJSMX
+// ============================================================
+function generateSZSJSMX(record, date) {
+    const fields = SZ_SJSMX_FIELDS;
+    const bizConfig = getBizConfig(record.bizType);
+    
+    let line = '';
+    fields.forEach(field => {
+        let value = record.fields[field.name] || field.default || '';
+        
+        // 深圳ETF买卖(JY00)通过成交数量正负区分买卖方向
+        if (bizConfig && bizConfig.ywlb === 'JY00') {
+            if (field.name === 'MXCJSL' && value) {
+                const num = parseFloat(value) || 0;
+                if (bizConfig.direction === '卖出' && num > 0) {
+                    value = -Math.abs(num); // 卖出时成交数量取负
+                }
+            }
+            if (field.name === 'MXQSBJ' && value) {
+                const num = parseFloat(value) || 0;
+                if (bizConfig.direction === '卖出' && num > 0) {
+                    value = -Math.abs(num); // 卖出时清算本金取负
+                }
+            }
+        }
+        
+        if (field.type === 'N') {
+            value = formatAmount(parseFloat(value) || 0, field.len);
+        } else if (value === '' || value === undefined) {
+            value = ' '.repeat(field.len);
+        } else {
+            value = String(value).padEnd(field.len).substring(0, field.len);
+        }
+        line += value;
+    });
+    return line + '\n';
+}
+
+// ============================================================
+// 生成深圳SJSFX
+// ============================================================
+function generateSZSJSFX(record, date) {
+    const fields = SZ_SJSFX_FIELDS;
+    let line = '';
+    fields.forEach(field => {
+        let value = record.fields[field.name] || field.default || '';
+        if (field.date) {
+            if (field.name === 'FXJSRQ') value = addDays(date, 1);
+            else value = date;
+        }
+        if (field.type === 'N') {
+            value = formatAmount(parseFloat(value) || 0, field.len);
+        } else if (value === '' || value === undefined) {
+            value = ' '.repeat(field.len);
+        } else {
+            value = String(value).padEnd(field.len).substring(0, field.len);
+        }
+        line += value;
+    });
+    return line + '\n';
+}
+
+// ============================================================
+// 渲染输出文件
+// ============================================================
+function renderOutputFiles() {
+    const container = document.getElementById('outputFiles');
+    if (generatedFiles.length === 0) {
+        container.innerHTML = '<div class="empty-msg">暂无生成文件</div>';
+        return;
+    }
+    
+    const grouped = {};
+    generatedFiles.forEach(file => {
+        const key = file.dateLabel;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(file);
+    });
+    
+    container.innerHTML = Object.entries(grouped).map(([label, files]) => `
+        <div style="margin-bottom: 16px;">
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">📅 ${label}</div>
+            ${files.map(file => `
+                <div class="output-file">
+                    <span class="name">${file.name}</span>
+                    <div class="info">
+                        <span class="size">${file.market} | ${file.ywxx}${file.subType ? ' | ' + file.subType : ''}</span>
+                        <button class="download-btn" onclick="downloadFile('${file.name}', ${JSON.stringify(file.content).replace(/"/g, '&quot;')})">下载</button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `).join('');
+}
+
+// ============================================================
+// 下载单个文件
+// ============================================================
+function downloadFile(fileName, content) {
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// 打包下载
+// ============================================================
+function downloadAll() {
+    if (generatedFiles.length === 0) {
+        alert('请先生成文件');
+        return;
+    }
+    const zipContent = generatedFiles.map(f => '=== ' + f.name + ' ===\n' + f.content).join('\n');
+    const blob = new Blob([zipContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '清算文件_' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// 工具函数
+// ============================================================
+function formatDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return y + '' + m + '' + d;
+}
+
+function addDays(dateStr, days) {
+    const date = new Date(dateStr.substring(0, 4) + '-' + dateStr.substring(4, 6) + '-' + dateStr.substring(6, 8));
+    date.setDate(date.getDate() + days);
+    return formatDate(date);
+}
+
+function formatAmount(value, len = 19) {
+    const str = Math.abs(value).toFixed(2);
+    const sign = value < 0 ? '-' : '';
+    return sign + str.padStart(len - 1, '0');
+}
+
+function updateStatusInfo() {
+    const info = document.getElementById('statusInfo');
+    const bizConfig = currentBizType ? getBizConfig(currentBizType) : null;
+    let text = '就绪';
+    if (bizConfig) {
+        text = currentMarket + ' | ' + bizConfig.name + '-' + bizConfig.direction + ' | ';
+        if (bizConfig.ywlx) text += 'YWLX:' + bizConfig.ywlx;
+        if (bizConfig.ywlb) text += 'YWLB:' + bizConfig.ywlb;
+        if (bizConfig.zqlb) text += ' | ZQLB:' + bizConfig.zqlb;
+    }
+    info.textContent = text;
+    updateRecordCount();
+}
+
+// ============================================================
+// 更新记录统计
+// ============================================================
+function updateRecordCount() {
+    const countDiv = document.getElementById('recordCount');
+    const genPreview = document.getElementById('genPreview');
+    if (!countDiv) return;
+    
+    const validRecords = records.filter(r => r.bizType);
+    if (validRecords.length === 0) {
+        countDiv.innerHTML = '';
+        if (genPreview) genPreview.innerHTML = '';
+        return;
+    }
+    
+    // 统计各业务类型的数量
+    const stats = {};
+    validRecords.forEach(r => {
+        const config = getBizConfig(r.bizType);
+        if (config) {
+            const key = config.name + '-' + config.direction;
+            if (!stats[key]) stats[key] = { count: 0, splitCount: config.autoSplit ? config.splitConfig.length : 1 };
+            stats[key].count++;
+        }
+    });
+    
+    // 计算预估生成文件数
+    let totalFiles = 0;
+    Object.values(stats).forEach(s => {
+        totalFiles += s.count * s.splitCount;
+    });
+    
+    countDiv.innerHTML = `
+        <span style="color: var(--accent-green);">📊 ${validRecords.length}条记录</span>
+        ${Object.entries(stats).map(([name, data]) => ` | <span style="color: var(--text-secondary);">${name}×${data.count}</span>`).join('')}
+    `;
+    
+    // 更新生成预览
+    if (genPreview) {
+        genPreview.innerHTML = `（预估 ${totalFiles} 个文件）`;
+    }
+}
+
+// ============================================================
+// 快捷填充示例数据
+// ============================================================
+function fillSampleData(recordId) {
+    const record = records.find(r => r.id === recordId);
+    if (!record) return;
+    
+    const bizConfig = getBizConfig(record.bizType);
+    if (!bizConfig) return;
+    
+    if (currentMarket === 'SH') {
+        record.fields['CJBH'] = 'CJ' + Date.now().toString().slice(-12);
+        record.fields['WTBH'] = 'WT' + Date.now().toString().slice(-12);
+        record.fields['ZQDM1'] = '510300'; // 示例ETF代码
+        record.fields['CJSL'] = '10000';
+        record.fields['JG1'] = '3.8500';
+        record.fields['QSJE'] = '38500.00';
+        record.fields['YHS'] = '0';
+        record.fields['JSF'] = '5.00';
+        record.fields['GHF'] = '0';
+        record.fields['ZGF'] = '0.50';
+        record.fields['SXF'] = '11.55';
+    } else {
+        record.fields['MXZQDM'] = '159919'; // 示例ETF代码
+        record.fields['MXCJSL'] = '10000';
+        record.fields['MXCJJG'] = '3.8500';
+        record.fields['MXQSBJ'] = '38500.00';
+        record.fields['MXYHS'] = '0';
+        record.fields['MXJYJSF'] = '5.00';
+        record.fields['MXJGGF'] = '0.50';
+        record.fields['MXJSF'] = '3.08';
+        record.fields['MXSXF'] = '11.55';
+        record.fields['MXZJJE'] = '0';
+    }
+    
+    renderRecords();
+    calcActualAmount(recordId);
+}
+
+// ============================================================
+// 初始化
+// ============================================================
+init();
+</script>
+</body>
+</html>
